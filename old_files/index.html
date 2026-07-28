@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Libro de Obra Digital</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Babel -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- Import Map -->
+  <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "lucide-react": "https://esm.sh/lucide-react@0.344.0"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel" data-type="module">
+    import React, { useState, useMemo, useRef } from "react";
+    import { createRoot } from "react-dom/client";
+    import {
+      Building2, MapPin, Hash, TrendingUp, Search, Plus, X, ChevronDown,
+      User, ShieldCheck, FileSignature, CheckCircle2, XCircle, AlertTriangle,
+      KeyRound, MessageSquare, Link2, Clock, Eye, ClipboardList, RefreshCcw, Lock
+    } from "lucide-react";
+
+    /* ------------------------------------------------------------------ */
+    /*  Configuración estática del dominio                                 */
+    /* ------------------------------------------------------------------ */
+
+    const CATEGORY_CONFIG = {
+      Instrucción: { color: "var(--blueprint)", bg: "var(--blueprint-bg)", Icon: ClipboardList },
+      Avance: { color: "var(--slate)", bg: "var(--slate-bg)", Icon: TrendingUp },
+      "Recepción de Partida": { color: "var(--approval)", bg: "var(--approval-bg)", Icon: CheckCircle2 },
+      Incidente: { color: "var(--incident)", bg: "var(--incident-bg)", Icon: AlertTriangle },
+      Modificación: { color: "var(--amend)", bg: "var(--amend-bg)", Icon: RefreshCcw },
+    };
+
+    const ROLES = {
+      constructor: {
+        label: "Administrador de Obra / Constructor",
+        short: "Constructor",
+        name: "Felipe Contreras M.",
+        canCreate: true,
+        canComment: false,
+        categories: ["Avance", "Incidente", "Modificación", "Recepción de Partida"],
+      },
+      ito: {
+        label: "ITO — Inspector Técnico de Obra",
+        short: "ITO",
+        name: "Carla Reyes S.",
+        canCreate: true,
+        canComment: false,
+        categories: ["Instrucción", "Incidente", "Recepción de Partida"],
+      },
+      mandante: {
+        label: "Propietario / Mandante",
+        short: "Mandante",
+        name: "Inversiones Andes Ltda.",
+        canCreate: false,
+        canComment: true,
+        categories: [],
+      },
+    };
+
+    const INITIAL_FOLIOS = [
+      {
+        id: 11,
+        folioNumber: 11,
+        category: "Recepción de Partida",
+        title: "Recepción de enfierradura de fundaciones eje A-B",
+        body: "Se verifica en terreno la enfierradura de fundaciones corridas entre los ejes A y B, conforme a cuantía y diámetros indicados en plano EST-04 rev.2. Separación de estribos @20 cm verificada con huincha. Recubrimiento mínimo de 5 cm cumplido según NCh429. No se observan deficiencias. Se autoriza el hormigonado de la partida.",
+        resultado: "Aprobado",
+        creatorRole: "ito",
+        creatorName: "Carla Reyes S.",
+        createdAt: "2026-06-22T09:15:00",
+        status: "firmado",
+        signedAt: "2026-06-22T09:22:00",
+        signature: { code: "AF3-991-KX" },
+        refFolio: null,
+        comments: [],
+      },
+      {
+        id: 12,
+        folioNumber: 12,
+        category: "Incidente",
+        title: "Rotura de matriz de agua potable por retroexcavadora en eje C-3",
+        body: "Durante excavación de fundaciones en eje C-3, retroexcavadora modelo CAT 320 impactó matriz de agua potable de 110 mm a 1,2 m de profundidad, no georreferenciada en el plano de instalaciones sanitarias entregado por el mandante. Se corta suministro general del sector a las 10:47 hrs. Se notifica a la empresa sanitaria para reparación de emergencia. Sin personal lesionado. Se adjuntará registro fotográfico como anexo.",
+        resultado: null,
+        creatorRole: "constructor",
+        creatorName: "Felipe Contreras M.",
+        createdAt: "2026-06-25T10:55:00",
+        status: "firmado",
+        signedAt: "2026-06-25T11:03:00",
+        signature: { code: "AF3-114-QP" },
+        refFolio: null,
+        comments: [],
+      },
+      {
+        id: 13,
+        folioNumber: 13,
+        category: "Instrucción",
+        title: "Refuerzo de moldaje en losa nivel 2 por deflexión observada",
+        body: "Se instruye reforzar el apuntalamiento del moldaje de losa nivel 2, paño comprendido entre ejes 3-5 / B-D, debido a deflexión superior a la tolerancia admisible detectada en inspección visual. Instalar puntales adicionales @0,8 m según detalle entregado en obra, previo al hormigonado programado. Plazo de ejecución: inmediato, antes de iniciar faena de hormigonado.",
+        resultado: null,
+        creatorRole: "ito",
+        creatorName: "Carla Reyes S.",
+        createdAt: "2026-06-29T08:40:00",
+        status: "firmado",
+        signedAt: "2026-06-29T08:44:00",
+        signature: { code: "AF3-227-TV" },
+        refFolio: null,
+        comments: [
+          {
+            author: "Inversiones Andes Ltda.",
+            role: "mandante",
+            text: "¿Esto retrasa la fecha de entrega de la losa nivel 2?",
+            createdAt: "2026-06-29T14:10:00",
+          },
+        ],
+      },
+      {
+        id: 14,
+        folioNumber: 14,
+        category: "Avance",
+        title: "Avance semanal — Hormigonado de losa nivel 1 completado",
+        body: "Se informa término de hormigonado de losa de entrepiso nivel 1, superficie total 480 m², resistencia especificada H-30. Avance físico acumulado de obra gruesa: 62%. Se adjunta cartola de despacho de hormigón N°4482 y registro fotográfico de la faena.",
+        resultado: null,
+        creatorRole: "constructor",
+        creatorName: "Felipe Contreras M.",
+        createdAt: "2026-07-03T17:20:00",
+        status: "firmado",
+        signedAt: "2026-07-03T17:26:00",
+        signature: { code: "AF3-305-LR" },
+        refFolio: null,
+        comments: [],
+      },
+      {
+        id: 15,
+        folioNumber: 15,
+        category: "Modificación",
+        title: "Modificación de especificación técnica — Impermeabilización de cubierta",
+        body: "Se propone modificar el sistema de impermeabilización de cubierta, desde membrana asfáltica soldada a sistema de poliuretano líquido aplicado in situ, a solicitud del mandante por criterio de mayor durabilidad y menor mantención. Pendiente cubicación de costo diferencial y aprobación formal antes de continuar con la faena de cubierta.",
+        resultado: null,
+        creatorRole: "constructor",
+        creatorName: "Felipe Contreras M.",
+        createdAt: "2026-07-10T12:05:00",
+        status: "borrador",
+        signedAt: null,
+        signature: null,
+        refFolio: null,
+        comments: [],
+      },
+    ];
+
+    /* ------------------------------------------------------------------ */
+    /*  Utilidades                                                          */
+    /* ------------------------------------------------------------------ */
+
+    function formatDateTime(iso) {
+      if (!iso) return "—";
+      const d = new Date(iso);
+      return d.toLocaleString("es-CL", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    }
+
+    function foliostr(n) {
+      return String(n).padStart(3, "0");
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  Componente principal                                               */
+    /* ------------------------------------------------------------------ */
+
+    function App() {
+      const [folios, setFolios] = useState(INITIAL_FOLIOS);
+      const [role, setRole] = useState("constructor");
+      const [search, setSearch] = useState("");
+      const [categoryFilter, setCategoryFilter] = useState("Todas");
+      const [form, setForm] = useState({ category: "", title: "", body: "", resultado: "", refFolio: null });
+      const [pendingSign, setPendingSign] = useState(null);
+      const [pin, setPin] = useState("");
+      const [pinError, setPinError] = useState("");
+      const [commentDrafts, setCommentDrafts] = useState({});
+      const formRef = useRef(null);
+
+      const currentRole = ROLES[role];
+
+      const nextFolioNumber = useMemo(
+        () => Math.max(0, ...folios.map((f) => f.folioNumber)) + 1,
+        [folios]
+      );
+
+      const visibleFolios = useMemo(() => {
+        return folios
+          .filter((f) => (role === "mandante" ? f.status === "firmado" : true))
+          .filter((f) => (categoryFilter === "Todas" ? true : f.category === categoryFilter))
+          .filter((f) => {
+            if (!search.trim()) return true;
+            const q = search.toLowerCase();
+            return (
+              f.title.toLowerCase().includes(q) ||
+              f.body.toLowerCase().includes(q) ||
+              String(f.folioNumber).includes(q)
+            );
+          })
+          .sort((a, b) => b.folioNumber - a.folioNumber);
+      }, [folios, role, categoryFilter, search]);
+
+      const progreso = 62;
+
+      function resetForm() {
+        setForm({ category: "", title: "", body: "", resultado: "", refFolio: null });
+      }
+
+      function buildDraftFolio(status) {
+        if (!form.category || !form.title.trim() || !form.body.trim()) return null;
+        return {
+          id: nextFolioNumber,
+          folioNumber: nextFolioNumber,
+          category: form.category,
+          title: form.title.trim(),
+          body: form.body.trim(),
+          resultado: form.resultado || null,
+          creatorRole: role,
+          creatorName: currentRole.name,
+          createdAt: new Date().toISOString(),
+          status,
+          signedAt: null,
+          signature: null,
+          refFolio: form.refFolio,
+          comments: [],
+        };
+      }
+
+      function handleSaveDraft() {
+        const draft = buildDraftFolio("borrador");
+        if (!draft) return;
+        setFolios((prev) => [...prev, draft]);
+        resetForm();
+      }
+
+      function handleRequestSign() {
+        const draft = buildDraftFolio("firmado");
+        if (!draft) return;
+        setPendingSign(draft);
+        setPin("");
+        setPinError("");
+      }
+
+      function handleConfirmSignature() {
+        if (pin.length !== 4 || !/^\d{4}$/.test(pin)) {
+          setPinError("Ingresa un PIN de 4 dígitos para validar tu identidad.");
+          return;
+        }
+        const code = "AF" + Math.floor(100 + Math.random() * 899) + "-" + Math.random().toString(36).slice(2, 6).toUpperCase();
+        const signed = {
+          ...pendingSign,
+          signedAt: new Date().toISOString(),
+          signature: { code },
+        };
+        setFolios((prev) => [...prev, signed]);
+        setPendingSign(null);
+        setPin("");
+        resetForm();
+      }
+
+      function handleStartAmendment(folio) {
+        setForm({
+          category: "Modificación",
+          title: `Enmienda al Folio N°${foliostr(folio.folioNumber)}`,
+          body: "",
+          resultado: "",
+          refFolio: folio.folioNumber,
+        });
+        formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+
+      function handleAddComment(folioId) {
+        const text = (commentDrafts[folioId] || "").trim();
+        if (!text) return;
+        setFolios((prev) =>
+          prev.map((f) =>
+            f.id === folioId
+              ? {
+                  ...f,
+                  comments: [
+                    ...f.comments,
+                    { author: currentRole.name, role, text, createdAt: new Date().toISOString() },
+                  ],
+                }
+              : f
+          )
+        );
+        setCommentDrafts((prev) => ({ ...prev, [folioId]: "" }));
+      }
+
+      return (
+        <div className="libro-obra-app min-h-screen w-full" style={{ background: "var(--paper)" }}>
+          <style>{`
+            @import url('https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+            .libro-obra-app {
+              --ink: #16233B;
+              --ink-light: #2C4066;
+              --paper: #EDF0F1;
+              --paper-card: #FFFFFF;
+              --concrete: #666D73;
+              --concrete-soft: #8A9096;
+              --line: #D7DCDD;
+
+              --blueprint: #2B5F8A;
+              --blueprint-bg: #E4EDF3;
+              --slate: #5B6472;
+              --slate-bg: #E9EAEC;
+              --approval: #276749;
+              --approval-bg: #E4F0E9;
+              --incident: #A8360F;
+              --incident-bg: #F5E3DC;
+              --amend: #8A5A0B;
+              --amend-bg: #F3E9D6;
+              --stamp: #9B1C1C;
+
+              font-family: 'Inter', sans-serif;
+              color: var(--ink);
+            }
+            .libro-obra-app .font-display { font-family: 'Roboto Slab', serif; }
+            .libro-obra-app .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+            .libro-obra-app .perforation {
+              background-image: radial-gradient(circle, var(--paper) 2.5px, transparent 2.6px);
+              background-size: 100% 16px;
+              background-position: center;
+            }
+
+            .libro-obra-app .stamp-box {
+              border: 2px solid var(--stamp);
+              color: var(--stamp);
+              transform: rotate(-2deg);
+            }
+
+            .libro-obra-app ::selection {
+              background: var(--ink);
+              color: white;
+            }
+
+            .libro-obra-app .scrollbar-thin::-webkit-scrollbar { width: 6px; }
+            .libro-obra-app .scrollbar-thin::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+          `}</style>
+
+          <header
+            className="w-full px-5 md:px-8 py-4 flex items-center justify-between"
+            style={{ background: "var(--ink)", color: "white" }}
+          >
+            <div className="flex items-center gap-3">
+              <div
+                className="w-10 h-10 rounded flex items-center justify-center shrink-0"
+                style={{ background: "rgba(255,255,255,0.12)" }}
+              >
+                <Building2 size={20} />
+              </div>
+              <div>
+                <h1 className="font-display text-lg leading-tight tracking-tight">Libro de Obra Digital</h1>
+                <p className="text-xs" style={{ color: "rgba(255,255,255,0.6)" }}>
+                  Bitácora legal de obra — registro foliado e inmutable
+                </p>
+              </div>
+            </div>
+            <div className="hidden md:flex items-center gap-2 text-xs font-mono" style={{ color: "rgba(255,255,255,0.7)" }}>
+              <Lock size={14} />
+              <span>Folios firmados: inmutables por ley</span>
+            </div>
+          </header>
+
+          <div className="flex flex-col md:flex-row w-full">
+            <aside className="w-full md:w-96 shrink-0 border-b md:border-b-0 md:border-r" style={{ borderColor: "var(--line)" }}>
+              <div className="p-5 space-y-6">
+                <div
+                  className="rounded-md p-4 space-y-3"
+                  style={{ background: "var(--paper-card)", border: "1px solid var(--line)" }}
+                >
+                  <p className="text-xs uppercase tracking-wider font-semibold" style={{ color: "var(--concrete-soft)" }}>
+                    Datos de la obra
+                  </p>
+                  <div className="flex items-start gap-2">
+                    <Building2 size={16} className="mt-0.5 shrink-0" style={{ color: "var(--ink-light)" }} />
+                    <p className="font-display text-sm font-semibold leading-snug">Edificio Mirador del Parque</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <MapPin size={15} className="mt-0.5 shrink-0" style={{ color: "var(--concrete)" }} />
+                    <p className="text-sm" style={{ color: "var(--concrete)" }}>
+                      Av. Las Industrias 4521, Renca, Santiago
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Hash size={15} className="mt-0.5 shrink-0" style={{ color: "var(--concrete)" }} />
+                    <p className="text-sm font-mono" style={{ color: "var(--concrete)" }}>
+                      Permiso Edificación N° DOM-RENCA-0142/2024
+                    </p>
+                  </div>
+
+                  <div className="pt-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-semibold" style={{ color: "var(--concrete)" }}>
+                        Avance físico de obra
+                      </span>
+                      <span className="text-xs font-mono font-semibold">{progreso}%</span>
+                    </div>
+                    <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: "var(--paper)" }}>
+                      <div
+                        className="h-full rounded-full"
+                        style={{ width: `${progreso}%`, background: "var(--ink-light)" }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs uppercase tracking-wider font-semibold" style={{ color: "var(--concrete-soft)" }}>
+                    Iniciar sesión como
+                  </p>
+                  <div className="relative">
+                    <select
+                      value={role}
+                      onChange={(e) => setRole(e.target.value)}
+                      className="w-full appearance-none text-sm rounded-md py-2.5 pl-9 pr-8 focus:outline-none focus:ring-2"
+                      style={{
+                        background: "var(--paper-card)",
+                        border: "1px solid var(--line)",
+                        color: "var(--ink)",
+                      }}
+                    >
+                      {Object.entries(ROLES).map(([key, r]) => (
+                        <option key={key} value={key}>
+                          {r.label}
+                        </option>
+                      ))}
+                    </select>
+                    <User size={15} className="absolute left-3 top-3" style={{ color: "var(--concrete)" }} />
+                    <ChevronDown size={15} className="absolute right-3 top-3 pointer-events-none" style={{ color: "var(--concrete)" }} />
+                  </div>
+                  <p className="text-xs" style={{ color: "var(--concrete)" }}>
+                    Actuando como <span className="font-semibold">{currentRole.name}</span>
+                  </p>
+                </div>
+
+                <div ref={formRef} className="space-y-3">
+                  <p className="text-xs uppercase tracking-wider font-semibold" style={{ color: "var(--concrete-soft)" }}>
+                    Nuevo folio
+                  </p>
+
+                  {!currentRole.canCreate ? (
+                    <div
+                      className="rounded-md p-4 flex items-start gap-2"
+                      style={{ background: "var(--paper-card)", border: "1px dashed var(--line)" }}
+                    >
+                      <Eye size={16} className="mt-0.5 shrink-0" style={{ color: "var(--concrete)" }} />
+                      <p className="text-sm" style={{ color: "var(--concrete)" }}>
+                        Rol de solo lectura. Puedes revisar la bitácora y dejar comentarios en los folios firmados.
+                      </p>
+                    </div>
+                  ) : (
+                    <div
+                      className="rounded-md p-4 space-y-3"
+                      style={{ background: "var(--paper-card)", border: "1px solid var(--line)" }}
+                    >
+                      {form.refFolio && (
+                        <div
+                          className="flex items-center gap-2 text-xs rounded px-2 py-1.5"
+                          style={{ background: "var(--amend-bg)", color: "var(--amend)" }}
+                        >
+                          <Link2 size={13} />
+                          <span>Enmienda referida al Folio N°{foliostr(form.refFolio)}</span>
+                          <button
+                            onClick={() => setForm((f) => ({ ...f, refFolio: null }))}
+                            className="ml-auto"
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      )}
+
+                      <div className="relative">
+                        <select
+                          value={form.category}
+                          onChange={(e) => setForm((f) => ({ ...f, category: e.target.value, resultado: "" }))}
+                          className="w-full appearance-none text-sm rounded-md py-2 pl-3 pr-8 focus:outline-none focus:ring-2"
+                          style={{ background: "var(--paper)", border: "1px solid var(--line)" }}
+                        >
+                          <option value="">Categoría…</option>
+                          {currentRole.categories.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown size={14} className="absolute right-3 top-2.5 pointer-events-none" style={{ color: "var(--concrete)" }} />
+                      </div>
+
+                      <input
+                        value={form.title}
+                        onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                        placeholder="Título del folio"
+                        className="w-full text-sm rounded-md py-2 px-3 focus:outline-none focus:ring-2"
+                        style={{ background: "var(--paper)", border: "1px solid var(--line)" }}
+                      />
+
+                      <textarea
+                        value={form.body}
+                        onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
+                        placeholder="Contenido técnico del folio…"
+                        rows={5}
+                        className="w-full text-sm rounded-md py-2 px-3 resize-none focus:outline-none focus:ring-2"
+                        style={{ background: "var(--paper)", border: "1px solid var(--line)" }}
+                      />
+
+                      {role === "ito" && form.category === "Recepción de Partida" && (
+                        <div className="flex gap-2">
+                          {["Aprobado", "Rechazado", "Observado"].map((r) => (
+                            <button
+                              key={r}
+                              onClick={() => setForm((f) => ({ ...f, resultado: r }))}
+                              className="flex-1 text-xs py-1.5 rounded border font-medium"
+                              style={{
+                                borderColor: form.resultado === r ? "var(--ink)" : "var(--line)",
+                                background: form.resultado === r ? "var(--ink)" : "transparent",
+                                color: form.resultado === r ? "white" : "var(--concrete)",
+                              }}
+                            >
+                              {r}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="flex flex-col gap-2 pt-1">
+                        <button
+                          onClick={handleRequestSign}
+                          className="w-full flex items-center justify-center gap-2 text-sm font-semibold rounded-md py-2.5 transition-opacity hover:opacity-90"
+                          style={{ background: "var(--ink)", color: "white" }}
+                        >
+                          <FileSignature size={16} />
+                          Firmar y Publicar
+                        </button>
+                        <button
+                          onClick={handleSaveDraft}
+                          className="w-full flex items-center justify-center gap-2 text-sm font-medium rounded-md py-2 border"
+                          style={{ borderColor: "var(--line)", color: "var(--concrete)" }}
+                        >
+                          <Plus size={15} />
+                          Guardar como borrador
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </aside>
+
+            <main className="flex-1 p-5 md:p-8 space-y-5">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
+                  <Search size={16} className="absolute left-3 top-3" style={{ color: "var(--concrete)" }} />
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Buscar por palabra clave o N° de folio…"
+                    className="w-full text-sm rounded-md py-2.5 pl-9 pr-3 focus:outline-none focus:ring-2"
+                    style={{ background: "var(--paper-card)", border: "1px solid var(--line)" }}
+                  />
+                </div>
+                <div className="relative w-full sm:w-56">
+                  <select
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                    className="w-full appearance-none text-sm rounded-md py-2.5 pl-3 pr-8 focus:outline-none focus:ring-2"
+                    style={{ background: "var(--paper-card)", border: "1px solid var(--line)" }}
+                  >
+                    <option>Todas</option>
+                    {Object.keys(CATEGORY_CONFIG).map((c) => (
+                      <option key={c}>{c}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-3 pointer-events-none" style={{ color: "var(--concrete)" }} />
+                </div>
+              </div>
+
+              <p className="text-xs font-mono" style={{ color: "var(--concrete-soft)" }}>
+                {visibleFolios.length} folio{visibleFolios.length !== 1 ? "s" : ""} en vista
+              </p>
+
+              <div className="space-y-4">
+                {visibleFolios.length === 0 && (
+                  <div
+                    className="rounded-md p-8 text-center text-sm"
+                    style={{ background: "var(--paper-card)", border: "1px dashed var(--line)", color: "var(--concrete)" }}
+                  >
+                    No hay folios que coincidan con la búsqueda o el filtro aplicado.
+                  </div>
+                )}
+
+                {visibleFolios.map((folio) => {
+                  const cfg = CATEGORY_CONFIG[folio.category];
+                  const CatIcon = cfg.Icon;
+                  const isDraft = folio.status === "borrador";
+                  return (
+                    <article
+                      key={folio.id}
+                      className="rounded-md overflow-hidden flex"
+                      style={{
+                        background: "var(--paper-card)",
+                        border: `1px solid ${isDraft ? "var(--line)" : "var(--line)"}`,
+                        borderStyle: isDraft ? "dashed" : "solid",
+                      }}
+                    >
+                      <div className="perforation w-3 shrink-0" style={{ background: "var(--paper)" }} />
+                      <div className="flex-1 p-5 space-y-3">
+                        <div className="flex flex-wrap items-center gap-2 justify-between">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-xs font-semibold px-2 py-1 rounded" style={{ background: "var(--paper)", color: "var(--ink)" }}>
+                              FOLIO N°{foliostr(folio.folioNumber)}
+                            </span>
+                            <span
+                              className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded"
+                              style={{ background: cfg.bg, color: cfg.color }}
+                            >
+                              <CatIcon size={12} />
+                              {folio.category}
+                            </span>
+                            {folio.resultado && (
+                              <span
+                                className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded"
+                                style={{
+                                  background: folio.resultado === "Aprobado" ? "var(--approval-bg)" : "var(--incident-bg)",
+                                  color: folio.resultado === "Aprobado" ? "var(--approval)" : "var(--incident)",
+                                }}
+                              >
+                                {folio.resultado === "Aprobado" ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
+                                {folio.resultado}
+                              </span>
+                            )}
+                            {folio.refFolio && (
+                              <span className="flex items-center gap-1 text-xs" style={{ color: "var(--concrete)" }}>
+                                <Link2 size={12} />
+                                referencia Folio N°{foliostr(folio.refFolio)}
+                              </span>
+                            )}
+                          </div>
+                          <span
+                            className="text-xs font-semibold px-2 py-1 rounded"
+                            style={{
+                              background: isDraft ? "var(--paper)" : "var(--approval-bg)",
+                              color: isDraft ? "var(--concrete)" : "var(--approval)",
+                            }}
+                          >
+                            {isDraft ? "BORRADOR" : "FIRMADO"}
+                          </span>
+                        </div>
+
+                        <h3 className="font-display font-semibold text-base leading-snug">{folio.title}</h3>
+
+                        <p className="text-sm leading-relaxed" style={{ color: "var(--ink-light)" }}>
+                          {folio.body}
+                        </p>
+
+                        <div className="flex items-center gap-4 text-xs pt-1" style={{ color: "var(--concrete)" }}>
+                          <span className="flex items-center gap-1">
+                            <User size={12} />
+                            {folio.creatorName} · {ROLES[folio.creatorRole].short}
+                          </span>
+                          <span className="flex items-center gap-1 font-mono">
+                            <Clock size={12} />
+                            {formatDateTime(folio.createdAt)}
+                          </span>
+                        </div>
+
+                        {!isDraft && (
+                          <div
+                            className="stamp-box inline-flex items-center gap-2 rounded px-3 py-1.5 mt-2"
+                          >
+                            <ShieldCheck size={15} />
+                            <div className="leading-tight">
+                              <p className="text-xs font-bold font-mono">FIRMA ELECTRÓNICA AVANZADA</p>
+                              <p className="text-[11px] font-mono">
+                                Cód. verificación {folio.signature?.code} · {formatDateTime(folio.signedAt)}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-4 pt-2" style={{ borderTop: "1px solid var(--line)" }}>
+                          {!isDraft && currentRole.canCreate && (
+                            <button
+                              onClick={() => handleStartAmendment(folio)}
+                              className="flex items-center gap-1.5 text-xs font-semibold pt-2"
+                              style={{ color: "var(--amend)" }}
+                            >
+                              <RefreshCcw size={13} />
+                              Crear enmienda
+                            </button>
+                          )}
+                        </div>
+
+                        {folio.comments.length > 0 && (
+                          <div className="space-y-2 pt-1">
+                            {folio.comments.map((c, i) => (
+                              <div key={i} className="flex items-start gap-2 text-xs rounded p-2" style={{ background: "var(--paper)" }}>
+                                <MessageSquare size={13} className="mt-0.5 shrink-0" style={{ color: "var(--concrete)" }} />
+                                <p style={{ color: "var(--concrete)" }}>
+                                  <span className="font-semibold" style={{ color: "var(--ink)" }}>
+                                    {c.author}:
+                                  </span>{" "}
+                                  {c.text}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {currentRole.canComment && !isDraft && (
+                          <div className="flex gap-2 pt-1">
+                            <input
+                              value={commentDrafts[folio.id] || ""}
+                              onChange={(e) => setCommentDrafts((prev) => ({ ...prev, [folio.id]: e.target.value }))}
+                              placeholder="Dejar un comentario…"
+                              className="flex-1 text-xs rounded-md py-2 px-3 focus:outline-none focus:ring-2"
+                              style={{ background: "var(--paper)", border: "1px solid var(--line)" }}
+                            />
+                            <button
+                              onClick={() => handleAddComment(folio.id)}
+                              className="text-xs font-semibold px-3 rounded-md"
+                              style={{ background: "var(--ink)", color: "white" }}
+                            >
+                              Enviar
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </main>
+          </div>
+
+          {pendingSign && (
+            <div
+              className="fixed inset-0 flex items-center justify-center p-4 z-50"
+              style={{ background: "rgba(22, 35, 59, 0.55)" }}
+            >
+              <div className="w-full max-w-sm rounded-md p-6 space-y-4" style={{ background: "var(--paper-card)" }}>
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "var(--blueprint-bg)" }}>
+                    <ShieldCheck size={18} style={{ color: "var(--blueprint)" }} />
+                  </div>
+                  <div>
+                    <p className="font-display font-semibold text-sm">Firma Electrónica Avanzada</p>
+                    <p className="text-xs" style={{ color: "var(--concrete)" }}>
+                      Folio N°{foliostr(pendingSign.folioNumber)} · {pendingSign.category}
+                    </p>
+                  </div>
+                  <button onClick={() => setPendingSign(null)} className="ml-auto">
+                    <X size={16} style={{ color: "var(--concrete)" }} />
+                  </button>
+                </div>
+
+                <div className="text-xs rounded p-3 space-y-1" style={{ background: "var(--paper)" }}>
+                  <p>
+                    <span style={{ color: "var(--concrete)" }}>Firmante: </span>
+                    <span className="font-semibold">{currentRole.name}</span>
+                  </p>
+                  <p>
+                    <span style={{ color: "var(--concrete)" }}>Rol: </span>
+                    <span className="font-semibold">{currentRole.label}</span>
+                  </p>
+                  <p style={{ color: "var(--incident)" }}>
+                    Al firmar, este folio quedará bloqueado y no podrá editarse ni eliminarse.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold flex items-center gap-1.5 mb-1.5">
+                    <KeyRound size={13} />
+                    PIN de firma (4 dígitos)
+                  </label>
+                  <input
+                    value={pin}
+                    onChange={(e) => {
+                      setPin(e.target.value.replace(/\D/g, "").slice(0, 4));
+                      setPinError("");
+                    }}
+                    type="password"
+                    inputMode="numeric"
+                    placeholder="••••"
+                    className="w-full text-center tracking-[0.5em] text-lg font-mono rounded-md py-2.5 focus:outline-none focus:ring-2"
+                    style={{ background: "var(--paper)", border: "1px solid var(--line)" }}
+                  />
+                  {pinError && (
+                    <p className="text-xs mt-1" style={{ color: "var(--incident)" }}>
+                      {pinError}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPendingSign(null)}
+                    className="flex-1 text-sm font-medium rounded-md py-2.5 border"
+                    style={{ borderColor: "var(--line)", color: "var(--concrete)" }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleConfirmSignature}
+                    className="flex-1 flex items-center justify-center gap-2 text-sm font-semibold rounded-md py-2.5"
+                    style={{ background: "var(--ink)", color: "white" }}
+                  >
+                    <FileSignature size={15} />
+                    Confirmar y firmar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+    
+    const root = createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+</body>
+</html>
