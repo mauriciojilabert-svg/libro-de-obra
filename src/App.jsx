@@ -34,7 +34,7 @@ class ErrorBoundary extends React.Component {
 /* ================================================================== */
 const CATEGORY_CONFIG = {
   Instrucción: { color: "var(--color-info)", bg: "var(--color-info-bg)", Icon: ClipboardList },
-  Avance: { color: "var(--text-muted)", bg: "rgba(160,174,192,0.12)", Icon: TrendingUp },
+  Avance: { color: "#2563EB", bg: "rgba(37,99,235,0.12)", Icon: TrendingUp },
   "Recepción de Partida": { color: "var(--color-success)", bg: "var(--color-success-bg)", Icon: CircleCheck },
   Incidente: { color: "var(--color-danger)", bg: "var(--color-danger-bg)", Icon: TriangleAlert },
   Modificación: { color: "var(--color-warning)", bg: "var(--color-warning-bg)", Icon: RefreshCcw },
@@ -173,8 +173,8 @@ function NewFolioSheet({ role, nextFolioNumber, onClose, onSave }) {
   }
 
   return (
-    <div className="fade-in" style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "flex-end", justifyContent: "center", background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
-      <div className="sheet-enter glass-panel" style={{ width: "100%", maxWidth: 480, maxHeight: "92vh", overflowY: "auto", borderRadius: "24px 24px 0 0", padding: 24 }} onClick={(e) => e.stopPropagation()}>
+    <div className="fade-in" style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "flex-end", justifyContent: "center", background: "rgba(0,0,0,0.65)" }} onClick={onClose}>
+      <div className="sheet-enter" style={{ width: "100%", maxWidth: 480, maxHeight: "92vh", overflowY: "auto", borderRadius: "24px 24px 0 0", padding: 24, background: "var(--bg-canvas)" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <h2 className="font-display" style={{ fontSize: 18, fontWeight: 700 }}>Nuevo Folio N°{foliostr(nextFolioNumber)}</h2>
           <button onClick={onClose} style={{ padding: 8, background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}><X size={22} /></button>
