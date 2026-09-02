@@ -45,7 +45,7 @@ const ROLES = {
 };
 
 const MOCK_CREDENTIALS = {
-  "mauricio@test.cl": { password: "test123", role: "constructor" },
+  "cristian": { password: "123", role: "constructor" },
   "carlitos@test.cl": { password: "test123", role: "ito" },
 };
 
@@ -434,8 +434,8 @@ function LoginScreen({ onLogin, isDark, toggleDark }) {
         </div>
         <div className="glass-panel" style={{ borderRadius: 24, padding: 28 }}>
           <div style={{ marginBottom: 18 }}>
-            <label style={labelStyle}>Correo</label>
-            <input value={email} onChange={(e) => { setEmail(e.target.value); setError(""); }} type="email" inputMode="email" placeholder="tu@empresa.cl" style={{ ...inputStyle, marginBottom: 0 }} />
+            <label style={labelStyle}>Usuario o Correo</label>
+            <input value={email} onChange={(e) => { setEmail(e.target.value); setError(""); }} type="text" autoCapitalize="none" placeholder="cristian" style={{ ...inputStyle, marginBottom: 0 }} />
           </div>
           <div style={{ marginBottom: 18 }}>
             <label style={labelStyle}>Contraseña</label>
@@ -447,7 +447,7 @@ function LoginScreen({ onLogin, isDark, toggleDark }) {
           </button>
           <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border-glass)", textAlign: "center" }}>
             <p style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Accesos Demo</p>
-            <p className="font-mono" style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.8 }}>mauricio@test.cl · test123</p>
+            <p className="font-mono" style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.8 }}>cristian · 123</p>
             <p className="font-mono" style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.8 }}>carlitos@test.cl · test123</p>
           </div>
         </div>
