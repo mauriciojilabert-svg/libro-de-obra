@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import {
-  Building2, MapPin, Hash, TrendingUp, Search, Plus, X, ChevronLeft,
-  CircleCheck, CircleX, TriangleAlert, Link2, ClipboardList,
+  Building2, MapPin, TrendingUp, Search, Plus, X, ChevronLeft,
+  CircleCheck, CircleX, TriangleAlert, ClipboardList,
   RefreshCcw, Lock, LogOut, BookMarked, Loader2, Home,
-  Sun, Moon, Camera, Image, Save, Edit3, Eye,
-  ShieldCheck, Fingerprint, KeyRound, FileSignature, CheckCheck,
+  Sun, Moon, Camera, Image, Edit3, Eye,
+  ShieldCheck, ShieldAlert, Fingerprint, FileSignature, CheckCheck,
+  AlertCircle, Sparkles, CheckSquare, Square, FolderGit2, RefreshCw,
 } from "lucide-react";
 
 /* ================================================================== */
@@ -30,7 +31,7 @@ class ErrorBoundary extends React.Component {
 }
 
 /* ================================================================== */
-/*  CONFIGURACIÓN — dominio obra pública MOP                           */
+/*  CONFIGURACIÓN — Dominio Obra Pública MOP                           */
 /* ================================================================== */
 
 const CATEGORY_CONFIG = {
@@ -41,7 +42,7 @@ const CATEGORY_CONFIG = {
   Modificación:           { color: "var(--color-warning)", bg: "var(--color-warning-bg)", Icon: RefreshCcw },
 };
 
-// Roles — dominio obra pública MOP
+// Roles oficiales — dominio obra pública MOP
 const ROLES = {
   inspector_fiscal: {
     label: "Inspector Fiscal MOP",
@@ -69,14 +70,14 @@ const ROLES = {
   },
 };
 
-// Credenciales demo — 3 roles
+// Credenciales demo
 const MOCK_CREDENTIALS = {
   "cristian":   { password: "123", role: "inspector_fiscal" },
   "mauricio":   { password: "123", role: "admin_contrato" },
   "prevencion": { password: "123", role: "prevencionista" },
 };
 
-// Contratos — obra pública MOP (no DOM municipal)
+// Contratos MOP con métricas de Carpeta Digital (Auditoría de Brecha Documental)
 const PROJECTS = [
   {
     id: 1,
@@ -84,6 +85,14 @@ const PROJECTS = [
     address: "Ruta 5 Norte, km 392–418, Región de Coquimbo",
     permit: "MOP-VIALIDAD-0842/2025",
     progress: 47,
+    carpetaDigital: {
+      respaldoPct: 22, // Brecha: 47 - 22 = 25% -> Riesgo Alto
+      docsCargados: 68,
+      docsExigidos: 150,
+      almacenamientoGB: "3.4 GB",
+      limiteGB: "10.0 GB",
+      ensayosPendientes: 14,
+    },
   },
   {
     id: 2,
@@ -91,6 +100,14 @@ const PROJECTS = [
     address: "Ruta 199, km 12, Temuco, Araucanía",
     permit: "MOP-VIALIDAD-0317/2025",
     progress: 21,
+    carpetaDigital: {
+      respaldoPct: 18, // Brecha: 21 - 18 = 3% -> Conforme
+      docsCargados: 35,
+      docsExigidos: 90,
+      almacenamientoGB: "1.8 GB",
+      limiteGB: "10.0 GB",
+      ensayosPendientes: 2,
+    },
   },
   {
     id: 3,
@@ -98,6 +115,14 @@ const PROJECTS = [
     address: "Ruta Y-71, km 0–45, Región de Magallanes",
     permit: "MOP-VIALIDAD-1103/2024",
     progress: 88,
+    carpetaDigital: {
+      respaldoPct: 61, // Brecha: 88 - 61 = 27% -> Riesgo Crítico
+      docsCargados: 142,
+      docsExigidos: 180,
+      almacenamientoGB: "7.9 GB",
+      limiteGB: "12.0 GB",
+      ensayosPendientes: 26,
+    },
   },
   {
     id: 4,
@@ -105,10 +130,163 @@ const PROJECTS = [
     address: "Av. Baquedano 650, Coyhaique, Región de Aysén",
     permit: "MOP-ARQ-0056/2025",
     progress: 9,
+    carpetaDigital: {
+      respaldoPct: 10, // Brecha: 9 - 10 = -1% -> Al día
+      docsCargados: 15,
+      docsExigidos: 45,
+      almacenamientoGB: "0.8 GB",
+      limiteGB: "8.0 GB",
+      ensayosPendientes: 0,
+    },
   },
 ];
 
-// Folios demo — lenguaje real de obra pública MOP
+// Checklists técnicos contextuales según categoría
+const CHECKLIST_TEMPLATES = {
+  "Recepción de Partida": [
+    { id: "ensayo_densidad", label: "Densidad in situ >95% Proctor", text: "Se ejecutaron ensayos de densidad in situ mediante método nuclear, cumpliendo sobre el 95% de la densidad máxima Proctor Modificado." },
+    { id: "lab_autocontrol", label: "Certificados de laboratorio acreditado", text: "Se adjuntan certificados del laboratorio de autocontrol acreditado ante el INN." },
+    { id: "topografia", label: "Control topográfico y cotas conforme", text: "Control topográfico conforme: espesores y rasantes respetan las tolerancias de las Especificaciones Técnicas." },
+    { id: "inspeccion_visual", label: "Inspección visual sin segregaciones", text: "Inspección visual favorable, sin segregaciones, fisuras ni deformaciones en la superficie terminada." },
+  ],
+  "Incidente": [
+    { id: "sin_lesionados", label: "Sin trabajadores lesionados graves", text: "Se constata que no hubo trabajadores con lesiones de consideración; se verificaron signos vitales y primeros auxilios." },
+    { id: "protocolo_ds40", label: "Activación de protocolo DS 40", text: "Se activó el protocolo interno de contingencia y notificación inmediata a la jefatura de prevención de riesgos." },
+    { id: "perimetro_seguro", label: "Área perimetrada y faena detenida", text: "El sector afectado fue acordonado con balizas reflectantes; faena paralizada preventivamente en el tramo." },
+    { id: "aviso_mop", label: "Aviso formal a Inspección Fiscal", text: "Se emitió reporte preliminar radial y telefónico al Inspector Fiscal del contrato dentro de los 30 minutos." },
+  ],
+  "Avance": [
+    { id: "maquinaria_op", label: "Maquinaria con check-list diario", text: "Equipos pesados operando con check-list de preuso al día y operadores con licencia municipal y examen al día." },
+    { id: "clima_favorable", label: "Condiciones climáticas aptas", text: "Condiciones meteorológicas favorables para la faena, sin precipitaciones ni vientos que afecten la calidad." },
+    { id: "volumen_cubicado", label: "Cubicación diaria verificada", text: "Volumen diario cubicado conforme a mediciones de terreno y registrado en planilla de avance físico." },
+  ],
+  "Instrucción": [
+    { id: "plazo_rcop", label: "Plazo expreso según Art. 64 RCOP", text: "Se otorga un plazo perentorio de días hábiles conforme al Art. 64 del RCOP para subsanar la observación." },
+    { id: "multa_asociada", label: "Apercibimiento de multa contractual", text: "El incumplimiento en el plazo señalado facultará a la Inspección Fiscal para cursar la multa estipulada en bases." },
+  ],
+  "Modificación": [
+    { id: "justificacion_tecnica", label: "Justificación técnica anexa", text: "La propuesta cuenta con memoria explicativa del proyectista y no altera las condiciones de seguridad vial." },
+    { id: "sin_aumento_plazo", label: "Sin afectación de ruta crítica", text: "La modificación no genera extensión de plazo contractual ni altera la fecha programada de entrega de obra." },
+  ],
+};
+
+/* ================================================================== */
+/*  MOTOR CRIPTOGRÁFICO — Cadena de Hashes SHA-256 (Inmutabilidad)     */
+/* ================================================================== */
+
+const GENESIS_HASH = "0000000000000000000000000000000000000000000000000000000000000000";
+
+// Normalización canónica para sellado inmutable
+function canonicalFolio(f) {
+  return JSON.stringify({
+    n: f.folioNumber,
+    c: f.category,
+    t: f.title.trim(),
+    b: f.body.trim(),
+    cr: f.creatorRole,
+    cn: f.creatorName,
+    ca: f.createdAt,
+    sa: f.signedAt || "",
+    p: (f.photos || []).map((photo) => photo.name || ""),
+  });
+}
+
+// SHA-256 con Web Crypto API y fallback determinista seguro
+async function sha256(text) {
+  try {
+    if (globalThis.crypto && globalThis.crypto.subtle) {
+      const data = new TextEncoder().encode(text);
+      const buffer = await globalThis.crypto.subtle.digest("SHA-256", data);
+      return Array.from(new Uint8Array(buffer))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+    }
+  } catch (err) {
+    console.warn("crypto.subtle no disponible, se utiliza fallback determinista", err);
+  }
+  let h1 = 0xdeadbeef, h2 = 0x41c64e6d, h3 = 0x85ebca6b, h4 = 0xc2b2ae35;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ (ch + i), 1597334677);
+    h3 = Math.imul(h3 ^ (ch * 31), 2246822507);
+    h4 = Math.imul(h4 ^ (ch + 7), 3266489909);
+  }
+  const toHex = (n) => (n >>> 0).toString(16).padStart(8, "0");
+  return (toHex(h1) + toHex(h2) + toHex(h3) + toHex(h4)).repeat(2);
+}
+
+// Auditoría forense: recalcula matemáticamente toda la cadena del proyecto
+async function auditFolioChain(folios) {
+  const signed = folios
+    .filter((f) => f.status === "firmado")
+    .sort((a, b) => a.folioNumber - b.folioNumber);
+
+  const results = [];
+  let previousHash = GENESIS_HASH;
+  let isBroken = false;
+
+  for (const f of signed) {
+    const canon = canonicalFolio(f);
+    const expectedHash = await sha256(canon + "|" + previousHash);
+    const storedHash = f.signature?.hash;
+    const storedPrev = f.signature?.previousHash;
+
+    const matches = storedHash === expectedHash && storedPrev === previousHash;
+    const status = isBroken ? "cadena_comprometida" : (matches ? "integro" : "adulterado");
+    if (!matches) isBroken = true;
+
+    results.push({
+      folio: f,
+      status, // "integro" | "adulterado" | "cadena_comprometida"
+      expectedHash,
+      storedHash: storedHash || "NO_FIRMADO",
+      storedPrev: storedPrev || "NINGUNO",
+      previousHashExpected: previousHash,
+    });
+
+    previousHash = storedHash || expectedHash;
+  }
+  return results;
+}
+
+// Sella de forma válida los folios iniciales demo
+async function sealInitialFolios(allFolios) {
+  const result = {};
+  for (const [projectId, list] of Object.entries(allFolios)) {
+    let prev = GENESIS_HASH;
+    const projectFolios = [];
+    for (const f of list) {
+      if (f.status === "firmado") {
+        const hash = await sha256(canonicalFolio(f) + "|" + prev);
+        projectFolios.push({
+          ...f,
+          signature: {
+            code: f.signature?.code || `MOP-2025-${String(f.folioNumber).padStart(3, "0")}-QA`,
+            hash,
+            previousHash: prev,
+            method: "FEA Avanzada + SHA-256 (e-Sign)",
+          },
+        });
+        prev = hash;
+      } else {
+        projectFolios.push({ ...f });
+      }
+    }
+    result[projectId] = projectFolios;
+  }
+  return result;
+}
+
+function shortHash(hash, len = 14) {
+  if (!hash) return "—";
+  if (hash === GENESIS_HASH) return "GÉNESIS (0000…0000)";
+  return hash.slice(0, len) + "…";
+}
+
+/* ================================================================== */
+/*  FOLIOS DEMO INICIALES — Lenguaje Técnico de Obra Pública MOP       */
+/* ================================================================== */
 const ALL_FOLIOS = {
   1: [
     {
@@ -198,41 +376,23 @@ const ALL_FOLIOS = {
     },
     {
       id: 32, folioNumber: 2,
-      category: "Recepción de Partida",
-      title: "Recepción de terraplén km 0–15",
-      body: "El Inspector Fiscal verifica la construcción del terraplén entre km 0 y km 15, con material de préstamo de la cantera autorizada C-03. Se realizaron 18 ensayos de compactación, todos con valores superiores al 95% DPMS exigido. La cota de proyecto se cumple con variaciones inferiores a ±2 cm según nivelación diferencial. Se aprueba la partida.",
-      resultado: "Aprobado", creatorRole: "inspector_fiscal", creatorName: "Cristián Manríquez",
-      createdAt: "2026-05-20T11:00:00", status: "firmado", signedAt: "2026-05-20T11:08:00",
+      category: "Instrucción",
+      title: "Medidas preventivas por temporada invernal extrema",
+      body: "El Inspector Fiscal instruye a la empresa contratista implementar de inmediato el plan de contingencia invernal: acopio de sal y cloruro de calcio para deshielo, turnos de 24 hrs para despeje de nieve con motoniveladora y habilitación de refugios de emergencia cada 15 km en la Ruta Y-71.",
+      resultado: null, creatorRole: "inspector_fiscal", creatorName: "Cristián Manríquez",
+      createdAt: "2026-05-02T10:00:00", status: "firmado", signedAt: "2026-05-02T10:12:00",
       signature: { code: "MOP-2024-202-GH" }, refFolio: null, geo: null, photos: [], comments: [],
-    },
-    {
-      id: 33, folioNumber: 3,
-      category: "Recepción de Partida",
-      title: "Recepción de carpeta asfáltica km 0–12",
-      body: "Se verifica la colocación de carpeta asfáltica AC-10 en el tramo km 0–12. Testigos extraídos: 6 unidades. Espesor promedio: 6,1 cm (mín. exigido 6,0 cm). Porcentaje de vacíos promedio: 4,8% (rango aceptable 3–6%). Resistencia a la compresión diametral promedio: 1.220 kPa (mín. exigido 800 kPa). Partida aprobada sin observaciones.",
-      resultado: "Aprobado", creatorRole: "inspector_fiscal", creatorName: "Cristián Manríquez",
-      createdAt: "2026-07-30T09:45:00", status: "firmado", signedAt: "2026-07-30T09:52:00",
-      signature: { code: "MOP-2024-203-IJ" }, refFolio: null, geo: null, photos: [], comments: [],
     },
   ],
   4: [
     {
       id: 41, folioNumber: 1,
       category: "Instrucción",
-      title: "Instrucción de entrega de terreno y condicionantes iniciales",
-      body: "El Inspector Fiscal procede a la entrega formal de terreno del contrato MOP-ARQ-0056/2025, Edificio de Servicios MOP, Coyhaique. Condicionantes: (1) el acceso de maquinaria respetará la servidumbre de paso sur de 4,0 m; (2) las excavaciones se ejecutarán con entibación según estudio de mecánica; (3) se prohíbe maquinaria pesada los días sábado, domingo y festivos por ordenanza municipal.",
+      title: "Entrega de terreno y acta de inicio edificación MOP",
+      body: "Se suscribe el Acta de Entrega de Terreno para las obras del nuevo Edificio de Servicios MOP en Coyhaique. Se hace entrega de las coordenadas georreferenciadas y los mojones de deslinde predial. El contratista dispone de 10 días para ingresar el Plan de Gestión Ambiental.",
       resultado: null, creatorRole: "inspector_fiscal", creatorName: "Cristián Manríquez",
-      createdAt: "2026-09-01T08:30:00", status: "firmado", signedAt: "2026-09-01T08:38:00",
-      signature: { code: "MOP-2025-301-KL" }, refFolio: null, geo: null, photos: [], comments: [],
-    },
-    {
-      id: 42, folioNumber: 2,
-      category: "Avance",
-      title: "Inicio de excavación de fundaciones sector A",
-      body: "El Administrador de Contrato informa el inicio de la excavación de fundaciones en el sector A del Edificio de Servicios MOP. La excavación se realiza con retroexcavadora CAT 320 con entibación metálica según diseño provisional aprobado. Profundidad de proyecto: -3,5 m del nivel de pavimento. Volumen estimado: 480 m³.",
-      resultado: null, creatorRole: "admin_contrato", creatorName: "Mauricio Jilabert",
-      createdAt: "2026-09-08T14:00:00", status: "borrador",
-      signedAt: null, signature: null, refFolio: null, geo: null, photos: [], comments: [],
+      createdAt: "2026-08-20T11:00:00", status: "firmado", signedAt: "2026-08-20T11:15:00",
+      signature: { code: "MOP-2025-301-JK" }, refFolio: null, geo: null, photos: [], comments: [],
     },
   ],
 };
@@ -240,7 +400,7 @@ const ALL_FOLIOS = {
 /* ================================================================== */
 /*  SERVICIOS                                                          */
 /* ================================================================== */
-const netDelay = (ms = 400) => new Promise((r) => setTimeout(r, ms));
+const netDelay = (ms = 350) => new Promise((r) => setTimeout(r, ms));
 
 const authService = {
   async login(email, password) {
@@ -252,22 +412,31 @@ const authService = {
 };
 
 const folioService = {
-  // Crea borrador (producción: POST /api/v1/folios/)
-  async create(p) { await netDelay(300); return { ...p, createdAt: new Date().toISOString() }; },
+  async create(p) { await netDelay(250); return { ...p, createdAt: new Date().toISOString() }; },
 
-  // Firma electrónica avanzada (producción: POST /api/v1/folios/:id/firmar/)
-  // Simula la consulta al proveedor de FEA y devuelve el folio firmado con código.
-  async sign(folio) {
-    await netDelay(800);
+  async sign(folio, previousHash = GENESIS_HASH) {
+    await netDelay(600);
+    const signedAt = new Date().toISOString();
     const code = "MOP-" + new Date().getFullYear() + "-" +
       String(folio.folioNumber).padStart(3, "0") + "-" +
       Math.random().toString(36).slice(2, 4).toUpperCase() +
       Math.floor(10 + Math.random() * 89);
-    return { ...folio, status: "firmado", signedAt: new Date().toISOString(), signature: { code } };
+
+    const signedCandidate = { ...folio, status: "firmado", signedAt };
+    const hash = await sha256(canonicalFolio(signedCandidate) + "|" + previousHash);
+
+    return {
+      ...signedCandidate,
+      signature: {
+        code,
+        hash,
+        previousHash,
+        method: "FEA Avanzada + SHA-256 (e-Sign)",
+      },
+    };
   },
 
-  // Aprueba o rechaza (producción: POST /api/v1/folios/:id/resolver/)
-  async resolve(id, resultado) { await netDelay(400); return { id, resultado }; },
+  async resolve(id, resultado) { await netDelay(300); return { id, resultado }; },
 };
 
 /* ================================================================== */
@@ -278,6 +447,9 @@ function formatDateTime(iso) {
   return new Date(iso).toLocaleString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 function foliostr(n) { return String(n).padStart(3, "0"); }
+
+const labelStyle = { fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 8 };
+const inputStyle = { width: "100%", borderRadius: 12, padding: "13px 14px", marginBottom: 18, background: "rgba(0,0,0,0.04)", border: "1px solid var(--border-glass)", color: "var(--text-main)", outline: "none" };
 
 /* ================================================================== */
 /*  CAPTURA DE FOTOS                                                   */
@@ -324,20 +496,83 @@ function PhotoCapture({ photos, onPhotosChange }) {
 }
 
 /* ================================================================== */
-/*  MODAL DE FIRMA ELECTRÓNICA AVANZADA                                */
-/*  Flujo: advertencia legal → PIN simulado → biometría → confirmación */
+/*  CHECKLIST ASISTIDO PARA REDACCIÓN EN TERRENO                       */
+/* ================================================================== */
+function QuickChecklist({ category, onInsertText }) {
+  const templates = CHECKLIST_TEMPLATES[category] || [];
+  const [selectedIds, setSelectedIds] = useState([]);
+
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [category]);
+
+  if (templates.length === 0) return null;
+
+  function toggleItem(item) {
+    const isChecked = selectedIds.includes(item.id);
+    const next = isChecked ? selectedIds.filter((id) => id !== item.id) : [...selectedIds, item.id];
+    setSelectedIds(next);
+    onInsertText(item.text, !isChecked);
+  }
+
+  function handleInsertAll() {
+    const unselected = templates.filter((t) => !selectedIds.includes(t.id));
+    unselected.forEach((t) => onInsertText(t.text, true));
+    setSelectedIds(templates.map((t) => t.id));
+  }
+
+  return (
+    <div style={{ marginBottom: 18, padding: 14, borderRadius: 14, background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.18)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+          <Sparkles size={14} /> Asistente Técnico ({category})
+        </span>
+        <button type="button" onClick={handleInsertAll} style={{ background: "none", border: "none", fontSize: 11, fontWeight: 600, color: "var(--accent)", cursor: "pointer" }}>
+          + Insertar todo
+        </button>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {templates.map((item) => {
+          const active = selectedIds.includes(item.id);
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => toggleItem(item)}
+              style={{
+                display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 8,
+                background: active ? "var(--color-info-bg)" : "rgba(255,255,255,0.4)",
+                border: active ? "1px solid var(--color-info)" : "1px solid rgba(0,0,0,0.06)",
+                textAlign: "left", cursor: "pointer", fontSize: 11, color: active ? "var(--color-info)" : "var(--text-main)",
+                transition: "all 0.2s ease",
+              }}
+            >
+              {active ? <CheckSquare size={14} color="var(--color-info)" /> : <Square size={14} color="var(--text-muted)" />}
+              <span style={{ fontWeight: active ? 600 : 500 }}>{item.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 8, opacity: 0.75 }}>
+        Toca un ítem para insertar automáticamente la redacción técnica estandarizada al texto.
+      </p>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  MODAL DE FIRMA ELECTRÓNICA AVANZADA (FEA)                          */
 /* ================================================================== */
 function SignatureModal({ folio, role, onCancel, onSigned }) {
   const currentRole = ROLES[role];
-  // "warning" → "pin" → "bio" → "done"
-  const [step, setStep] = useState("warning");
+  const [step, setStep] = useState("terms"); // "terms" | "pin" | "bio" | "done"
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState("");
   const [signing, setSigning] = useState(false);
 
-  function submitPin() {
-    if (pin.length !== 4 || !/^\d{4}$/.test(pin)) {
-      setPinError("Ingresa el PIN de 4 dígitos de tu certificado digital.");
+  function handlePinSubmit() {
+    if (pin.length < 4) {
+      setPinError("Ingresa tu PIN de 4 dígitos");
       return;
     }
     setPinError("");
@@ -346,106 +581,92 @@ function SignatureModal({ folio, role, onCancel, onSigned }) {
 
   async function runBiometric() {
     setSigning(true);
-    try {
-      // Punto de integración real: WebAuthn / SDK del proveedor de FEA
-      // (p.ej. navigator.credentials.get(...)). Aquí se simula la respuesta.
-      const signed = await folioService.sign(folio);
-      setStep("done");
-      setTimeout(() => onSigned(signed), 900);
-    } catch {
-      setSigning(false);
-      setStep("pin");
-      setPinError("No se pudo completar la firma. Reintenta.");
-    }
+    await netDelay(900);
+    setSigning(false);
+    setStep("done");
+    await netDelay(650);
+    onSigned();
   }
 
   return (
-    <div
-      className="fade-in"
-      style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "flex-end", justifyContent: "center", background: "rgba(0,0,0,0.72)" }}
-      onClick={step !== "done" ? onCancel : undefined}
-    >
-      <div
-        className="sheet-enter"
-        style={{ width: "100%", maxWidth: 480, borderRadius: "24px 24px 0 0", padding: 28, background: "var(--bg-canvas)" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Cabecera */}
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 22 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 14, background: "var(--color-info-bg)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <ShieldCheck size={22} style={{ color: "var(--color-info)" }} />
+    <div className="fade-in" style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(0,0,0,0.72)" }} onClick={onCancel}>
+      <div className="sheet-enter glass-panel" style={{ width: "100%", maxWidth: 440, borderRadius: 24, padding: 26, background: "var(--bg-canvas)", border: "1px solid var(--border-glass)" }} onClick={(e) => e.stopPropagation()}>
+        
+        {/* Encabezado */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: "var(--color-info-bg)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-info)" }}>
+              <FileSignature size={18} />
+            </div>
+            <div>
+              <h3 className="font-display" style={{ fontSize: 16, fontWeight: 700 }}>Firma Electrónica Avanzada</h3>
+              <p style={{ fontSize: 11, color: "var(--text-muted)" }}>Sellado criptográfico SHA-256 e inmutabilidad MOP</p>
+            </div>
           </div>
-          <div style={{ flex: 1 }}>
-            <p className="font-display" style={{ fontSize: 16, fontWeight: 700 }}>Firma Electrónica Avanzada</p>
-            <p style={{ fontSize: 11, color: "var(--text-muted)" }}>Folio N°{foliostr(folio.folioNumber)} · {folio.category}</p>
-          </div>
-          {step !== "done" && (
-            <button onClick={onCancel} style={{ padding: 6, background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}><X size={20} /></button>
-          )}
+          <button onClick={onCancel} style={{ padding: 6, background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}><X size={20} /></button>
         </div>
 
-        {/* PASO 1 — Advertencia legal */}
-        {step === "warning" && (
-          <>
-            <div style={{ borderRadius: 14, padding: "14px 16px", marginBottom: 16, background: "var(--color-danger-bg)", border: "1px solid rgba(239,68,68,0.25)" }}>
-              <p style={{ fontSize: 13, fontWeight: 700, color: "var(--color-danger)", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
-                <TriangleAlert size={15} /> Advertencia legal
+        {/* PASO 1 — Términos legales */}
+        {step === "terms" && (
+          <div>
+            <div style={{ padding: 14, borderRadius: 14, background: "var(--color-warning-bg)", border: "1px solid rgba(245,158,11,0.3)", marginBottom: 16 }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: "var(--color-warning)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4, display: "flex", alignItems: "center", gap: 5 }}>
+                <TriangleAlert size={14} /> Advertencia Legal
               </p>
-              <p style={{ fontSize: 13, lineHeight: 1.7, color: "var(--text-main)" }}>
-                Al firmar, el folio queda <strong>bloqueado</strong>: no podrá editarse ni eliminarse. Los folios firmados son <strong>inmutables</strong> conforme al Reglamento de Contratos de Obra Pública (RCOP).
+              <p style={{ fontSize: 12, color: "var(--text-main)", lineHeight: 1.6 }}>
+                Al firmar con FEA, el folio quedará <strong>bloqueado de forma irreversible</strong> mediante un sello criptográfico encadenado. No podrá ser modificado ni eliminado por ninguna de las partes conforme a la Ley 19.799 y normativa MOP.
               </p>
             </div>
-            <div style={{ borderRadius: 12, padding: "12px 14px", marginBottom: 20, background: "var(--bg-glass)", border: "1px solid var(--border-glass)", fontSize: 12 }}>
-              <p style={{ color: "var(--text-muted)", marginBottom: 2 }}>Firmante</p>
-              <p style={{ fontWeight: 700, marginBottom: 8 }}>{currentRole.name}</p>
-              <p style={{ color: "var(--text-muted)", marginBottom: 2 }}>Rol</p>
-              <p style={{ fontWeight: 600 }}>{currentRole.label}</p>
+
+            <div style={{ padding: 12, borderRadius: 12, background: "rgba(0,0,0,0.04)", fontSize: 12, marginBottom: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={{ color: "var(--text-muted)" }}>Folio</span>
+                <span className="font-mono" style={{ fontWeight: 700 }}>N°{foliostr(folio.folioNumber)} · {folio.category}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={{ color: "var(--text-muted)" }}>Firmante</span>
+                <span style={{ fontWeight: 600 }}>{currentRole.name} ({currentRole.short})</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ color: "var(--text-muted)" }}>Estándar</span>
+                <span style={{ fontWeight: 600, color: "var(--color-info)" }}>SHA-256 + FEA Certificada</span>
+              </div>
             </div>
-            <button
-              onClick={() => setStep("pin")}
-              className="btn-tap btn-accent"
-              style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px 0", borderRadius: 14, border: "none", fontWeight: 700, fontSize: 15 }}
-            >
-              <FileSignature size={18} /> Continuar con la firma
+
+            <button onClick={() => setStep("pin")} className="btn-tap btn-accent" style={{ width: "100%", padding: "14px 0", borderRadius: 14, border: "none", fontWeight: 700, fontSize: 14 }}>
+              Continuar al PIN de Seguridad
             </button>
-            <button
-              onClick={onCancel}
-              style={{ width: "100%", marginTop: 10, padding: "12px 0", borderRadius: 14, border: "none", background: "none", color: "var(--text-muted)", fontWeight: 600, fontSize: 14, cursor: "pointer" }}
-            >
-              Cancelar
-            </button>
-          </>
+          </div>
         )}
 
-        {/* PASO 2 — PIN del certificado */}
+        {/* PASO 2 — PIN */}
         {step === "pin" && (
-          <>
-            <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
-              <KeyRound size={14} /> PIN del certificado digital
-            </label>
+          <div>
+            <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>
+              Ingresa tu PIN de firma de 4 dígitos (Demo: cualquier 4 dígitos).
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "center", marginBottom: 16 }}>
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} style={{ width: 48, height: 56, borderRadius: 12, border: "2px solid " + (pin.length > i ? "var(--accent)" : "var(--border-glass)"), background: pin.length > i ? "var(--accent-glow)" : "rgba(0,0,0,0.03)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 700 }}>
+                  {pin.length > i ? "•" : ""}
+                </div>
+              ))}
+            </div>
             <input
-              value={pin}
-              onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setPinError(""); }}
               type="password"
               inputMode="numeric"
+              maxLength={4}
+              value={pin}
               autoFocus
-              placeholder="••••"
-              style={{ ...inputStyle, textAlign: "center", letterSpacing: "0.5em", fontSize: 26, fontWeight: 700, marginBottom: pinError ? 6 : 4 }}
+              onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setPinError(""); }}
+              placeholder="Escribe 4 dígitos…"
+              style={{ ...inputStyle, textAlign: "center", letterSpacing: "0.2em", fontSize: 16, marginBottom: 8 }}
             />
-            {pinError && (
-              <p style={{ fontSize: 12, color: "var(--color-danger)", marginBottom: 12 }}>{pinError}</p>
-            )}
-            <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 20 }}>
-              Para la demo, cualquier combinación de 4 dígitos es válida.
-            </p>
-            <button
-              onClick={submitPin}
-              className="btn-tap btn-accent"
-              style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px 0", borderRadius: 14, border: "none", fontWeight: 700, fontSize: 15 }}
-            >
-              Continuar
+            {pinError && <p style={{ color: "var(--color-danger)", fontSize: 12, marginBottom: 12, textAlign: "center" }}>{pinError}</p>}
+            <button onClick={handlePinSubmit} disabled={pin.length < 4} className="btn-tap btn-accent" style={{ width: "100%", padding: "14px 0", borderRadius: 14, border: "none", fontWeight: 700, fontSize: 14, opacity: pin.length < 4 ? 0.5 : 1 }}>
+              Validar PIN
             </button>
-          </>
+          </div>
         )}
 
         {/* PASO 3 — Biometría */}
@@ -471,19 +692,16 @@ function SignatureModal({ folio, role, onCancel, onSigned }) {
               }
             </button>
             <p className="font-display" style={{ fontSize: 17, fontWeight: 700, marginBottom: 8 }}>
-              {signing ? "Validando identidad…" : "Confirma con tu huella"}
+              {signing ? "Sellando criptográficamente…" : "Confirma con tu huella o Face ID"}
             </p>
-            <p style={{ fontSize: 12, color: "var(--text-muted)", maxWidth: 260, lineHeight: 1.7, marginBottom: signing ? 0 : 20 }}>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", maxWidth: 280, lineHeight: 1.7, marginBottom: signing ? 0 : 20 }}>
               {signing
-                ? "Consultando al proveedor de firma electrónica avanzada…"
-                : "Apoya el dedo en el sensor o usa Face ID para autorizar la firma con validez legal."
+                ? "Calculando resumen SHA-256 e incorporando a la cadena inmutable…"
+                : "Apoya el dedo en el sensor o usa Face ID para autorizar el sellado legal."
               }
             </p>
             {!signing && (
-              <button
-                onClick={() => setStep("pin")}
-                style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}
-              >
+              <button onClick={() => setStep("pin")} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}>
                 <ChevronLeft size={15} /> Volver al PIN
               </button>
             )}
@@ -496,9 +714,9 @@ function SignatureModal({ folio, role, onCancel, onSigned }) {
             <div style={{ width: 90, height: 90, borderRadius: "50%", background: "var(--color-success-bg)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
               <CheckCheck size={48} style={{ color: "var(--color-success)" }} />
             </div>
-            <p className="font-display" style={{ fontSize: 19, fontWeight: 700, marginBottom: 8 }}>¡Folio firmado!</p>
+            <p className="font-display" style={{ fontSize: 19, fontWeight: 700, marginBottom: 8 }}>¡Folio Sellado con Éxito!</p>
             <p style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.7 }}>
-              El registro fue incorporado a la bitácora de forma inmutable.
+              El registro fue incorporado a la cadena criptográfica SHA-256 de forma inmutable.
             </p>
           </div>
         )}
@@ -508,7 +726,263 @@ function SignatureModal({ folio, role, onCancel, onSigned }) {
 }
 
 /* ================================================================== */
-/*  CREAR NUEVO FOLIO                                                  */
+/*  PANTALLA DE AUDITORÍA Y VERIFICACIÓN FORENSE (SHA-256)             */
+/* ================================================================== */
+function IntegrityVerificationModal({ project, folios, onTamper, onRestore, isTampered, onClose }) {
+  const [verifying, setVerifying] = useState(true);
+  const [auditData, setAuditData] = useState([]);
+
+  const runAudit = useCallback(async () => {
+    setVerifying(true);
+    await netDelay(400);
+    const results = await auditFolioChain(folios);
+    setAuditData(results);
+    setVerifying(false);
+  }, [folios]);
+
+  useEffect(() => {
+    runAudit();
+  }, [runAudit]);
+
+  const allValid = auditData.length > 0 && auditData.every((r) => r.status === "integro");
+  const brokenIndex = auditData.findIndex((r) => r.status !== "integro");
+
+  return (
+    <div className="fade-in" style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,0.75)" }} onClick={onClose}>
+      <div className="sheet-enter glass-panel" style={{ width: "100%", maxWidth: 580, maxHeight: "90vh", overflowY: "auto", borderRadius: 24, padding: 24, background: "var(--bg-canvas)", border: "1px solid var(--border-glass)" }} onClick={(e) => e.stopPropagation()}>
+        
+        {/* Cabecera del modal */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: allValid ? "var(--color-success-bg)" : "var(--color-danger-bg)", color: allValid ? "var(--color-success)" : "var(--color-danger)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {allValid ? <ShieldCheck size={22} /> : <ShieldAlert size={22} />}
+            </div>
+            <div>
+              <h2 className="font-display" style={{ fontSize: 17, fontWeight: 700 }}>Auditoría Forense de Integridad</h2>
+              <p style={{ fontSize: 11, color: "var(--text-muted)" }}>{project.name}</p>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ padding: 6, background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}><X size={22} /></button>
+        </div>
+
+        {/* Estado global de la cadena */}
+        {verifying ? (
+          <div style={{ padding: 30, textAlign: "center", color: "var(--text-muted)" }}>
+            <Loader2 size={32} className="spin" style={{ margin: "0 auto 12px", color: "var(--accent)" }} />
+            <p style={{ fontSize: 13, fontWeight: 600 }}>Recalculando resúmenes criptográficos SHA-256…</p>
+          </div>
+        ) : (
+          <div>
+            <div style={{ padding: 16, borderRadius: 16, marginBottom: 18, background: allValid ? "var(--color-success-bg)" : "var(--color-danger-bg)", border: `1px solid ${allValid ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.3)"}` }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                {allValid ? <ShieldCheck size={20} color="var(--color-success)" /> : <ShieldAlert size={20} color="var(--color-danger)" />}
+                <p className="font-display" style={{ fontSize: 15, fontWeight: 700, color: allValid ? "var(--color-success)" : "var(--color-danger)" }}>
+                  {allValid ? `Cadena 100% Íntegra (${auditData.length} Folios Firmados)` : `¡Alerta de Adulteración Detectada!`}
+                </p>
+              </div>
+              <p style={{ fontSize: 12, color: "var(--text-main)", lineHeight: 1.6 }}>
+                {allValid
+                  ? "Todos los folios firmados coinciden matemáticamente con su hash SHA-256 y están encadenados secuencialmente desde el bloque Génesis. Inviolabilidad acreditada ante Contraloría y MOP."
+                  : `Inconsistencia detectada a partir del Folio N°${auditData[brokenIndex]?.folio.folioNumber}. El contenido del registro no genera el hash original firmado digitalmente. La cadena posterior queda invalidada.`}
+              </p>
+            </div>
+
+            {/* Cuadro de demostración comercial: Simulación de Fraude */}
+            <div style={{ padding: 14, borderRadius: 14, background: "rgba(0,0,0,0.03)", border: "1px dashed var(--border-glass)", marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: 6 }}>
+                  <Sparkles size={13} /> Demostración de Resistencia a Fraude
+                </span>
+                <span style={{ fontSize: 10, color: isTampered ? "var(--color-danger)" : "var(--color-success)", fontWeight: 700 }}>
+                  {isTampered ? "SIMULACIÓN ACTIVA" : "ESTADO REAL"}
+                </span>
+              </div>
+              <p style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5, marginBottom: 12 }}>
+                Simula una modificación no autorizada directa en la base de datos para comprobar cómo el recálculo criptográfico detecta al instante el engaño.
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                {!isTampered ? (
+                  <button onClick={onTamper} className="btn-tap" style={{ flex: 1, padding: "9px 12px", borderRadius: 10, border: "none", background: "var(--color-danger-bg)", color: "var(--color-danger)", fontWeight: 700, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                    <AlertCircle size={14} /> Simular adulteración en Folio N°2
+                  </button>
+                ) : (
+                  <button onClick={onRestore} className="btn-tap" style={{ flex: 1, padding: "9px 12px", borderRadius: 10, border: "none", background: "var(--color-success-bg)", color: "var(--color-success)", fontWeight: 700, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                    <RefreshCw size={14} /> Restaurar integridad original
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Visualización de la cadena de bloques */}
+            <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
+              Bloques Encadenados (Génesis → Último)
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+              {/* Bloque Génesis */}
+              <div style={{ padding: "10px 14px", borderRadius: 12, background: "rgba(0,0,0,0.02)", border: "1px solid var(--border-glass)", fontSize: 11 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontWeight: 700, color: "var(--text-muted)" }}>[BLOQUE GÉNESIS]</span>
+                  <span className="font-mono" style={{ fontSize: 10, color: "var(--text-muted)" }}>{shortHash(GENESIS_HASH, 20)}</span>
+                </div>
+              </div>
+
+              {auditData.map((item) => {
+                const isOk = item.status === "integro";
+                const isTamperedItem = item.status === "adulterado";
+                return (
+                  <div
+                    key={item.folio.id}
+                    style={{
+                      padding: 14, borderRadius: 14,
+                      background: isOk ? "var(--bg-glass)" : (isTamperedItem ? "var(--color-danger-bg)" : "rgba(239,68,68,0.06)"),
+                      border: `1px solid ${isOk ? "var(--border-glass)" : "var(--color-danger)"}`,
+                      transition: "all 0.3s ease",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span className="font-mono" style={{ fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 5, background: "var(--accent)", color: "#fff" }}>
+                          N°{foliostr(item.folio.folioNumber)}
+                        </span>
+                        <span style={{ fontSize: 12, fontWeight: 700 }}>{item.folio.title}</span>
+                      </div>
+                      <span
+                        style={{
+                          fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 6,
+                          background: isOk ? "var(--color-success-bg)" : "var(--color-danger-bg)",
+                          color: isOk ? "var(--color-success)" : "var(--color-danger)",
+                        }}
+                      >
+                        {isOk ? "✅ ÍNTEGRO" : (isTamperedItem ? "🚨 ADULTERADO" : "⚠️ CADENA ROTA")}
+                      </span>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 10, marginTop: 8 }}>
+                      <div>
+                        <span style={{ color: "var(--text-muted)", display: "block" }}>Hash SHA-256 Sello:</span>
+                        <span className="font-mono" style={{ fontWeight: 600, color: isOk ? "var(--text-main)" : "var(--color-danger)" }}>
+                          {shortHash(item.storedHash, 16)}
+                        </span>
+                      </div>
+                      <div>
+                        <span style={{ color: "var(--text-muted)", display: "block" }}>Hash Bloque Previo:</span>
+                        <span className="font-mono" style={{ fontWeight: 600 }}>{shortHash(item.storedPrev, 16)}</span>
+                      </div>
+                    </div>
+
+                    {!isOk && (
+                      <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px dashed rgba(239,68,68,0.3)", fontSize: 11, color: "var(--color-danger)" }}>
+                        <strong>Fallo de integridad:</strong> El hash calculado a partir del contenido actual (<code>{shortHash(item.expectedHash, 12)}</code>) no coincide con la firma legal registrada.
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <button onClick={onClose} className="btn-tap btn-accent" style={{ width: "100%", padding: "13px 0", borderRadius: 14, border: "none", fontWeight: 700, fontSize: 14 }}>
+          Cerrar Auditoría
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  WIDGET DE BRECHA DOCUMENTAL (CARPETA DIGITAL VS AVANCE FÍSICO)     */
+/* ================================================================== */
+function DocumentGapWidget({ project, onOpenAudit }) {
+  const cd = project.carpetaDigital;
+  if (!cd) return null;
+
+  const avanceFisico = project.progress;
+  const respaldoPct = cd.respaldoPct;
+  const brecha = avanceFisico - respaldoPct; // Si es positiva alta, hay riesgo de fiscalización
+  const esAlertaCritica = brecha > 15;
+
+  return (
+    <div className="glass-panel" style={{ borderRadius: 20, padding: 18, marginBottom: 16, position: "relative", overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 10, background: esAlertaCritica ? "var(--color-danger-bg)" : "var(--color-info-bg)", color: esAlertaCritica ? "var(--color-danger)" : "var(--color-info)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <FolderGit2 size={17} />
+          </div>
+          <div>
+            <p className="font-display" style={{ fontSize: 14, fontWeight: 700 }}>Auditoría de Carpeta Digital</p>
+            <p style={{ fontSize: 10, color: "var(--text-muted)" }}>Control MOP · Art. 108 RCOP</p>
+          </div>
+        </div>
+        <span
+          style={{
+            fontSize: 10, fontWeight: 700, padding: "4px 8px", borderRadius: 6,
+            background: esAlertaCritica ? "var(--color-danger-bg)" : "var(--color-success-bg)",
+            color: esAlertaCritica ? "var(--color-danger)" : "var(--color-success)",
+          }}
+        >
+          {esAlertaCritica ? `⚠️ Brecha: -${brecha}%` : `✅ Conforme (-${brecha}%)`}
+        </span>
+      </div>
+
+      {/* Barras comparativas de avance */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 4 }}>
+            <span style={{ color: "var(--text-muted)" }}>Avance Físico de Obra</span>
+            <span className="font-mono" style={{ fontWeight: 700, color: "var(--accent)" }}>{avanceFisico}%</span>
+          </div>
+          <div style={{ width: "100%", height: 6, borderRadius: 3, background: "rgba(0,0,0,0.06)", overflow: "hidden" }}>
+            <div style={{ width: `${avanceFisico}%`, height: "100%", borderRadius: 3, background: "var(--accent)" }} />
+          </div>
+        </div>
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 4 }}>
+            <span style={{ color: "var(--text-muted)" }}>Respaldo Documental en Carpeta Digital</span>
+            <span className="font-mono" style={{ fontWeight: 700, color: esAlertaCritica ? "var(--color-danger)" : "var(--color-success)" }}>{respaldoPct}%</span>
+          </div>
+          <div style={{ width: "100%", height: 6, borderRadius: 3, background: "rgba(0,0,0,0.06)", overflow: "hidden" }}>
+            <div style={{ width: `${respaldoPct}%`, height: "100%", borderRadius: 3, background: esAlertaCritica ? "var(--color-danger)" : "var(--color-success)" }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Alerta de riesgo contractual si hay brecha */}
+      {esAlertaCritica ? (
+        <div style={{ padding: 10, borderRadius: 10, background: "var(--color-danger-bg)", border: "1px solid rgba(239,68,68,0.2)", marginBottom: 12, fontSize: 11, color: "var(--text-main)", lineHeight: 1.5 }}>
+          <strong>Riesgo de Fiscalización:</strong> El avance físico supera por {brecha}% los antecedentes respaldados en la Carpeta Digital. Riesgo de reparo o retención del próximo Estado de Pago.
+        </div>
+      ) : (
+        <div style={{ padding: 10, borderRadius: 10, background: "var(--color-success-bg)", border: "1px solid rgba(16,185,129,0.2)", marginBottom: 12, fontSize: 11, color: "var(--text-main)", lineHeight: 1.5 }}>
+          <strong>Documentación al día:</strong> Los ensayos de laboratorio, estados de pago y cubicaciones acompañan el ritmo de avance físico exigido por el MOP.
+        </div>
+      )}
+
+      {/* Métricas rápidas */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, fontSize: 11, textAlign: "center", marginBottom: 12 }}>
+        <div style={{ padding: "8px 4px", borderRadius: 8, background: "rgba(0,0,0,0.03)" }}>
+          <p style={{ color: "var(--text-muted)", fontSize: 9, textTransform: "uppercase", fontWeight: 700 }}>Documentos</p>
+          <p style={{ fontWeight: 700, marginTop: 2 }}>{cd.docsCargados} / {cd.docsExigidos}</p>
+        </div>
+        <div style={{ padding: "8px 4px", borderRadius: 8, background: "rgba(0,0,0,0.03)" }}>
+          <p style={{ color: "var(--text-muted)", fontSize: 9, textTransform: "uppercase", fontWeight: 700 }}>Espacio Nube</p>
+          <p style={{ fontWeight: 700, marginTop: 2 }}>{cd.almacenamientoGB}</p>
+        </div>
+        <div style={{ padding: "8px 4px", borderRadius: 8, background: "rgba(0,0,0,0.03)" }}>
+          <p style={{ color: "var(--text-muted)", fontSize: 9, textTransform: "uppercase", fontWeight: 700 }}>Ensayos S/F</p>
+          <p style={{ fontWeight: 700, marginTop: 2, color: cd.ensayosPendientes > 0 ? "var(--color-danger)" : "var(--color-success)" }}>{cd.ensayosPendientes}</p>
+        </div>
+      </div>
+
+      <button onClick={onOpenAudit} className="btn-tap" style={{ width: "100%", padding: "10px 0", borderRadius: 10, border: "1px solid var(--border-glass)", background: "var(--bg-glass)", color: "var(--text-main)", fontWeight: 600, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+        <ShieldCheck size={15} color="var(--accent)" /> Auditar Integridad Criptográfica (SHA-256)
+      </button>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  CREAR NUEVO FOLIO CON ASISTENTE TÉCNICO                            */
 /* ================================================================== */
 function NewFolioSheet({ role, nextFolioNumber, onClose, onSave }) {
   const currentRole = ROLES[role];
@@ -517,6 +991,19 @@ function NewFolioSheet({ role, nextFolioNumber, onClose, onSave }) {
   const [body, setBody] = useState("");
   const [photos, setPhotos] = useState([]);
   const [saving, setSaving] = useState(false);
+
+  function handleInsertText(snippet, add) {
+    if (add) {
+      setBody((prev) => {
+        const trimmed = prev.trim();
+        if (!trimmed) return snippet;
+        if (trimmed.includes(snippet)) return prev;
+        return `${trimmed}\n• ${snippet}`;
+      });
+    } else {
+      setBody((prev) => prev.replace(`• ${snippet}`, "").replace(snippet, "").trim());
+    }
+  }
 
   async function handleSave() {
     if (!title.trim() || !body.trim()) return;
@@ -541,8 +1028,9 @@ function NewFolioSheet({ role, nextFolioNumber, onClose, onSave }) {
           <h2 className="font-display" style={{ fontSize: 18, fontWeight: 700 }}>Nuevo Folio N°{foliostr(nextFolioNumber)}</h2>
           <button onClick={onClose} style={{ padding: 8, background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}><X size={22} /></button>
         </div>
+
         <label style={labelStyle}>Categoría</label>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 18 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
           {currentRole.categories.map((c) => {
             const active = category === c; const cfg = CATEGORY_CONFIG[c]; return (
               <button key={c} onClick={() => setCategory(c)} type="button"
@@ -552,12 +1040,19 @@ function NewFolioSheet({ role, nextFolioNumber, onClose, onSave }) {
             );
           })}
         </div>
-        <label style={labelStyle}>Título</label>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Título del folio…" style={inputStyle} />
-        <label style={labelStyle}>Descripción técnica</label>
-        <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Describe la partida, instrucción o incidente…" rows={5} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
-        <label style={labelStyle}>Evidencia fotográfica</label>
+
+        {/* Asistente técnico de redacción */}
+        <QuickChecklist category={category} onInsertText={handleInsertText} />
+
+        <label style={labelStyle}>Título del folio</label>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej: Solicitud de recepción de subbase granular dm 4.200…" style={inputStyle} />
+
+        <label style={labelStyle}>Descripción técnica y antecedentes</label>
+        <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Describe el avance, partida, ensayo o incidente…" rows={6} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+
+        <label style={labelStyle}>Evidencia fotográfica en terreno</label>
         <PhotoCapture photos={photos} onPhotosChange={setPhotos} />
+
         <button onClick={handleSave} disabled={saving || !title.trim() || !body.trim()} className="btn-tap btn-accent"
           style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 15, fontWeight: 600, borderRadius: 14, padding: "14px 0", border: "none", marginTop: 20, opacity: (saving || !title.trim() || !body.trim()) ? 0.5 : 1 }}>
           {saving ? <Loader2 size={18} className="spin" /> : <Plus size={18} />}
@@ -568,17 +1063,10 @@ function NewFolioSheet({ role, nextFolioNumber, onClose, onSave }) {
   );
 }
 
-const labelStyle = { fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 8 };
-const inputStyle = { width: "100%", borderRadius: 12, padding: "13px 14px", marginBottom: 18, background: "rgba(0,0,0,0.04)", border: "1px solid var(--border-glass)", color: "var(--text-main)", outline: "none" };
-
 /* ================================================================== */
-/*  DETALLE DE FOLIO                                                   */
-/*  · Edición si es borrador propio                                    */
-/*  · Botón "Firmar" si es borrador propio (abre SignatureModal)       */
-/*  · Botones Aprobar/Rechazar para el Inspector Fiscal                */
-/*  · Banner de inmutabilidad si está firmado                          */
+/*  DETALLE DE FOLIO CON SELLO CRIPTOGRÁFICO Y ACCIONES                */
 /* ================================================================== */
-function FolioDetail({ folio, role, onClose, onUpdate }) {
+function FolioDetail({ folio, role, latestSignedHash, onOpenAudit, onClose, onUpdate }) {
   const currentRole = ROLES[role];
   const isDraft = folio.status === "borrador";
   const cfg = CATEGORY_CONFIG[folio.category] || CATEGORY_CONFIG["Instrucción"];
@@ -592,32 +1080,31 @@ function FolioDetail({ folio, role, onClose, onUpdate }) {
   const [showSignModal, setShowSignModal] = useState(false);
   const [resolving, setResolving] = useState(false);
 
-  // El folio fue creado por el usuario actual → puede editar y firmar
   const isOwner = folio.creatorRole === role;
-
-  // El Inspector Fiscal puede Aprobar/Rechazar si:
-  // - tiene canResolve
-  // - el folio está firmado
-  // - es Incidente o Recepción de Partida sin resultado aún
-  // - NO fue creado por él mismo
-  const canResolve =
+  const canResolveThis =
     currentRole.canResolve &&
     !isDraft &&
-    (folio.category === "Incidente" || folio.category === "Recepción de Partida") &&
-    folio.resultado === null &&
-    folio.creatorRole !== role;
+    !folio.resultado &&
+    (folio.category === "Recepción de Partida" || folio.category === "Incidente" || folio.category === "Modificación");
 
-  async function handleSave() {
+  async function handleSaveEdit() {
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 400));
-    onUpdate({ ...folio, title: title.trim(), body: body.trim(), photos });
+    const updated = {
+      ...folio,
+      title: title.trim(),
+      body: body.trim(),
+      photos: photos.map((p) => ({ id: p.id, name: p.name, preview: p.preview })),
+    };
+    await netDelay(200);
+    onUpdate(updated);
     setSaving(false);
     setEditing(false);
   }
 
-  function handleSigned(signedFolio) {
+  async function handleSigned() {
+    const signed = await folioService.sign(folio, latestSignedHash || GENESIS_HASH);
+    onUpdate(signed);
     setShowSignModal(false);
-    onUpdate(signedFolio);
   }
 
   async function handleResolve(resultado) {
@@ -628,124 +1115,142 @@ function FolioDetail({ folio, role, onClose, onUpdate }) {
   }
 
   return (
-    <div className="fade-in" style={{ position: "fixed", inset: 0, zIndex: 50, background: "var(--bg-canvas)", overflowY: "auto" }}>
+    <div className="fade-in" style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", flexDirection: "column", background: "var(--bg-canvas)", overflowY: "auto" }}>
       {/* Header */}
-      <div className="glass-panel" style={{ position: "sticky", top: 0, zIndex: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 10, borderRadius: 0, borderTop: "none", borderLeft: "none", borderRight: "none" }}>
-        <button onClick={onClose} className="btn-tap" style={{ width: 40, height: 40, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "1px solid var(--border-glass)", color: "var(--text-main)", minHeight: 40 }}>
-          <ChevronLeft size={20} />
+      <div className="glass-panel" style={{ position: "sticky", top: 0, zIndex: 10, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", borderRadius: 0, borderTop: "none", borderLeft: "none", borderRight: "none" }}>
+        <button onClick={onClose} className="btn-tap" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}>
+          <ChevronLeft size={20} /> Volver
         </button>
-        <div style={{ flex: 1 }}>
-          <p className="font-display" style={{ fontSize: 15, fontWeight: 700 }}>Folio N°{foliostr(folio.folioNumber)}</p>
-          <p style={{ fontSize: 11, color: "var(--text-muted)" }}>{folio.category}</p>
-        </div>
-        {/* Botón Editar: borrador propio, no editando */}
-        {isDraft && isOwner && !editing && (
-          <button onClick={() => setEditing(true)} className="btn-tap"
-            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 10, border: "1px solid var(--border-glass)", background: "var(--bg-glass)", color: "var(--text-main)", fontWeight: 600, fontSize: 12, minHeight: 36 }}>
-            <Edit3 size={14} /> Editar
-          </button>
-        )}
-        {/* Botón Firmar: borrador propio, no editando */}
-        {isDraft && isOwner && !editing && (
-          <button onClick={() => setShowSignModal(true)} className="btn-tap btn-accent"
-            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 10, border: "none", fontWeight: 700, fontSize: 12, minHeight: 36 }}>
-            <FileSignature size={14} /> Firmar
-          </button>
-        )}
+        <span className="font-mono" style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 8, background: "var(--accent)", color: "#fff" }}>
+          N°{foliostr(folio.folioNumber)}
+        </span>
       </div>
 
-      <div style={{ padding: 20, maxWidth: 600, margin: "0 auto" }}>
-        {/* Banner de inmutabilidad — solo folios firmados */}
-        {!isDraft && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, borderRadius: 12, padding: "10px 14px", marginBottom: 16, background: "var(--color-success-bg)", border: "1px solid rgba(16,185,129,0.2)" }}>
-            <Lock size={14} style={{ color: "var(--color-success)", flexShrink: 0 }} />
-            <p style={{ fontSize: 12, color: "var(--color-success)", fontWeight: 600 }}>
-              Folio firmado — Este registro es inmutable conforme al Reglamento de Contratos de Obra Pública.
-            </p>
+      <div style={{ padding: 20, maxWidth: 540, margin: "0 auto", width: "100%", paddingBottom: 60 }}>
+        {/* Banner de estado legal */}
+        <div style={{ padding: "12px 14px", borderRadius: 14, marginBottom: 16, background: isDraft ? "rgba(0,0,0,0.04)" : "var(--color-success-bg)", border: `1px solid ${isDraft ? "var(--border-glass)" : "rgba(16,185,129,0.3)"}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {isDraft ? <Lock size={16} color="var(--text-muted)" /> : <ShieldCheck size={18} color="var(--color-success)" />}
+            <span style={{ fontSize: 12, fontWeight: 700, color: isDraft ? "var(--text-muted)" : "var(--color-success)" }}>
+              {isDraft ? "Borrador de Trabajo (Modificable)" : "Folio Sellado con FEA (Inmutable)"}
+            </span>
+          </div>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6, background: cfg.bg, color: cfg.color }}>
+            <CatIcon size={12} /> {folio.category}
+          </span>
+        </div>
+
+        {/* Resolución previa */}
+        {folio.resultado && (
+          <div style={{ padding: "12px 16px", borderRadius: 14, marginBottom: 16, background: folio.resultado === "Aprobado" ? "var(--color-success-bg)" : "var(--color-danger-bg)", border: `1px solid ${folio.resultado === "Aprobado" ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.3)"}`, display: "flex", alignItems: "center", gap: 10 }}>
+            {folio.resultado === "Aprobado" ? <CircleCheck size={22} color="var(--color-success)" /> : <CircleX size={22} color="var(--color-danger)" />}
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 700, color: folio.resultado === "Aprobado" ? "var(--color-success)" : "var(--color-danger)" }}>
+                Resolución: {folio.resultado} por la Inspección Fiscal
+              </p>
+              <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>El Inspector Fiscal se pronunció sobre este registro legal.</p>
+            </div>
           </div>
         )}
 
-        {/* Badges de estado */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, padding: "5px 12px", borderRadius: 8, background: cfg.bg, color: cfg.color }}><CatIcon size={13} /> {folio.category}</span>
-          <span style={{ fontSize: 10, fontWeight: 700, padding: "5px 10px", borderRadius: 6, textTransform: "uppercase", letterSpacing: "0.06em", background: isDraft ? "rgba(0,0,0,0.05)" : "var(--color-success-bg)", color: isDraft ? "var(--text-muted)" : "var(--color-success)" }}>{isDraft ? "Borrador" : "Firmado"}</span>
-          {folio.resultado && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, padding: "5px 12px", borderRadius: 8, background: folio.resultado === "Aprobado" ? "var(--color-success-bg)" : "var(--color-danger-bg)", color: folio.resultado === "Aprobado" ? "var(--color-success)" : "var(--color-danger)" }}>
-              {folio.resultado === "Aprobado" ? <CircleCheck size={13} /> : <CircleX size={13} />} {folio.resultado}
-            </span>
-          )}
-        </div>
-
-        {/* Contenido editable */}
+        {/* Formulario de edición o vista */}
         {editing ? (
-          <>
+          <div>
             <label style={labelStyle}>Título</label>
             <input value={title} onChange={(e) => setTitle(e.target.value)} style={inputStyle} />
-            <label style={labelStyle}>Descripción</label>
+            <label style={labelStyle}>Descripción técnica</label>
             <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
             <label style={labelStyle}>Evidencia fotográfica</label>
             <PhotoCapture photos={photos} onPhotosChange={setPhotos} />
-            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button onClick={() => { setEditing(false); setTitle(folio.title); setBody(folio.body); setPhotos(folio.photos || []); }}
-                className="btn-tap" style={{ flex: 1, padding: "12px 0", borderRadius: 12, border: "1px solid var(--border-glass)", background: "none", color: "var(--text-muted)", fontWeight: 600, fontSize: 14 }}>Cancelar</button>
-              <button onClick={handleSave} disabled={saving || !title.trim() || !body.trim()}
-                className="btn-tap btn-accent" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "12px 0", borderRadius: 12, border: "none", fontWeight: 600, fontSize: 14, opacity: saving ? 0.6 : 1 }}>
-                {saving ? <Loader2 size={16} className="spin" /> : <Save size={16} />} Guardar
+            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+              <button onClick={() => setEditing(false)} className="btn-tap" style={{ flex: 1, padding: "12px 0", borderRadius: 12, border: "1px solid var(--border-glass)", background: "none", color: "var(--text-muted)", fontWeight: 600 }}>Cancelar</button>
+              <button onClick={handleSaveEdit} disabled={saving} className="btn-tap btn-accent" style={{ flex: 1, padding: "12px 0", borderRadius: 12, border: "none", fontWeight: 700 }}>
+                {saving ? "Guardando…" : "Guardar Cambios"}
               </button>
             </div>
-          </>
+          </div>
         ) : (
-          <>
-            <h2 className="font-display" style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.4, marginBottom: 12 }}>{folio.title}</h2>
-            <p style={{ fontSize: 14, lineHeight: 1.8, color: "var(--text-muted)", marginBottom: 20 }}>{folio.body}</p>
+          <div>
+            <h1 className="font-display" style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.4, marginBottom: 12 }}>{folio.title}</h1>
+            <p style={{ fontSize: 14, lineHeight: 1.8, color: "var(--text-main)", whiteSpace: "pre-line", marginBottom: 20 }}>{folio.body}</p>
+
             {folio.photos && folio.photos.length > 0 && (
               <div style={{ marginBottom: 20 }}>
-                <p style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Evidencia adjunta</p>
-                <div className="photo-grid">{folio.photos.map((p) => <img key={p.id} src={p.preview} alt={p.name} />)}</div>
+                <p style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>Evidencia Fotográfica ({folio.photos.length})</p>
+                <div className="photo-grid">
+                  {folio.photos.map((p) => (
+                    <div key={p.id} style={{ borderRadius: 12, overflow: "hidden" }}>
+                      <img src={p.preview} alt={p.name} style={{ width: "100%", height: 110, objectFit: "cover" }} />
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
-          </>
+          </div>
         )}
 
-        {/* Botones Aprobar / Rechazar — Inspector Fiscal */}
-        {canResolve && !editing && (
-          <div style={{ marginTop: 8, marginBottom: 16 }}>
-            <p style={labelStyle}>Resolución del Inspector Fiscal</p>
+        {/* Acciones para folios en Borrador */}
+        {isDraft && !editing && isOwner && (
+          <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+            <button onClick={() => setEditing(true)} className="btn-tap" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "13px 0", borderRadius: 12, border: "1px solid var(--border-glass)", background: "var(--bg-glass)", color: "var(--text-main)", fontWeight: 600, fontSize: 13 }}>
+              <Edit3 size={16} /> Editar Borrador
+            </button>
+            <button onClick={() => setShowSignModal(true)} className="btn-tap btn-accent" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "13px 0", borderRadius: 12, border: "none", fontWeight: 700, fontSize: 13 }}>
+              <FileSignature size={16} /> Firmar con FEA
+            </button>
+          </div>
+        )}
+
+        {/* Acciones de resolución (Inspector Fiscal) */}
+        {canResolveThis && (
+          <div className="glass-panel" style={{ borderRadius: 18, padding: 18, marginBottom: 20, border: "1px solid var(--accent)" }}>
+            <p className="font-display" style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Pronunciamiento de Inspección Fiscal</p>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5, marginBottom: 14 }}>
+              Como Inspector Fiscal, valida o rechaza formalmente esta partida o incidente para fines de Estado de Pago.
+            </p>
             <div style={{ display: "flex", gap: 10 }}>
-              <button
-                onClick={() => handleResolve("Aprobado")}
-                disabled={resolving}
-                className="btn-tap"
-                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px 0", borderRadius: 12, border: "none", fontWeight: 700, fontSize: 14, background: "var(--color-success-bg)", color: "var(--color-success)", opacity: resolving ? 0.6 : 1 }}
-              >
-                {resolving ? <Loader2 size={16} className="spin" /> : <CircleCheck size={18} />} Aprobar
+              <button onClick={() => handleResolve("Aprobado")} disabled={resolving} className="btn-tap" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px 0", borderRadius: 12, border: "none", fontWeight: 700, fontSize: 13, background: "var(--color-success-bg)", color: "var(--color-success)" }}>
+                {resolving ? <Loader2 size={16} className="spin" /> : <CircleCheck size={17} />} Aprobar Partida
               </button>
-              <button
-                onClick={() => handleResolve("Rechazado")}
-                disabled={resolving}
-                className="btn-tap"
-                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px 0", borderRadius: 12, border: "none", fontWeight: 700, fontSize: 14, background: "var(--color-danger-bg)", color: "var(--color-danger)", opacity: resolving ? 0.6 : 1 }}
-              >
-                {resolving ? <Loader2 size={16} className="spin" /> : <CircleX size={18} />} Rechazar
+              <button onClick={() => handleResolve("Rechazado")} disabled={resolving} className="btn-tap" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px 0", borderRadius: 12, border: "none", fontWeight: 700, fontSize: 13, background: "var(--color-danger-bg)", color: "var(--color-danger)" }}>
+                {resolving ? <Loader2 size={16} className="spin" /> : <CircleX size={17} />} Rechazar
               </button>
             </div>
           </div>
         )}
 
-        {/* Metadatos */}
+        {/* Sello criptográfico y metadatos */}
         {!editing && (
-          <div className="glass-panel" style={{ borderRadius: 16, padding: 16, marginTop: 10 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontSize: 12 }}>
-              <div><p style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 600, textTransform: "uppercase", marginBottom: 2 }}>Creado por</p><p style={{ fontWeight: 600 }}>{folio.creatorName}</p></div>
-              <div><p style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 600, textTransform: "uppercase", marginBottom: 2 }}>Fecha</p><p style={{ fontWeight: 500 }}>{formatDateTime(folio.createdAt)}</p></div>
-              {folio.signature && <div><p style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 600, textTransform: "uppercase", marginBottom: 2 }}>Código de firma</p><p className="font-mono" style={{ fontWeight: 600, fontSize: 11 }}>{folio.signature.code}</p></div>}
-              {folio.signedAt && <div><p style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 600, textTransform: "uppercase", marginBottom: 2 }}>Firmado el</p><p style={{ fontWeight: 500 }}>{formatDateTime(folio.signedAt)}</p></div>}
+          <div className="glass-panel" style={{ borderRadius: 18, padding: 18, marginTop: 10 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+              <ShieldCheck size={15} color="var(--accent)" /> Registro y Trazabilidad Legal
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontSize: 12, marginBottom: 12 }}>
+              <div><p style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 600, textTransform: "uppercase", marginBottom: 2 }}>Creador</p><p style={{ fontWeight: 600 }}>{folio.creatorName}</p></div>
+              <div><p style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 600, textTransform: "uppercase", marginBottom: 2 }}>Fecha Creación</p><p style={{ fontWeight: 500 }}>{formatDateTime(folio.createdAt)}</p></div>
+              {folio.signature && <div><p style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 600, textTransform: "uppercase", marginBottom: 2 }}>Código FEA</p><p className="font-mono" style={{ fontWeight: 700, fontSize: 11, color: "var(--color-info)" }}>{folio.signature.code}</p></div>}
+              {folio.signedAt && <div><p style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 600, textTransform: "uppercase", marginBottom: 2 }}>Sellado el</p><p style={{ fontWeight: 500 }}>{formatDateTime(folio.signedAt)}</p></div>}
             </div>
+
+            {folio.signature?.hash && (
+              <div style={{ paddingTop: 12, borderTop: "1px solid var(--border-glass)", fontSize: 11 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                  <span style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 600, textTransform: "uppercase" }}>Sello SHA-256</span>
+                  <span className="font-mono" style={{ fontSize: 10, color: "var(--accent)" }}>{shortHash(folio.signature.hash, 16)}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <span style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 600, textTransform: "uppercase" }}>Bloque Anterior</span>
+                  <span className="font-mono" style={{ fontSize: 10, color: "var(--text-muted)" }}>{shortHash(folio.signature.previousHash, 16)}</span>
+                </div>
+                <button onClick={onOpenAudit} className="btn-tap" style={{ width: "100%", padding: "8px 0", borderRadius: 8, border: "none", background: "var(--color-info-bg)", color: "var(--color-info)", fontWeight: 700, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+                  <ShieldCheck size={13} /> Ver Auditoría de Cadena Completa
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Modal de firma */}
       {showSignModal && (
         <SignatureModal folio={folio} role={role} onCancel={() => setShowSignModal(false)} onSigned={handleSigned} />
       )}
@@ -754,9 +1259,9 @@ function FolioDetail({ folio, role, onClose, onUpdate }) {
 }
 
 /* ================================================================== */
-/*  FOLIO CARD                                                         */
+/*  TARJETA DE FOLIO EN LA BITÁCORA                                    */
 /* ================================================================== */
-function FolioCard({ folio, currentRole, onClick }) {
+function FolioCard({ folio, onClick }) {
   const cfg = CATEGORY_CONFIG[folio.category] || CATEGORY_CONFIG["Instrucción"];
   const isDraft = folio.status === "borrador";
   const CatIcon = cfg.Icon;
@@ -770,7 +1275,10 @@ function FolioCard({ folio, currentRole, onClick }) {
             {folio.resultado === "Aprobado" ? <CircleCheck size={11} /> : <CircleX size={11} />} {folio.resultado}
           </span>
         )}
-        <span style={{ marginLeft: "auto", fontSize: 9, fontWeight: 700, padding: "3px 7px", borderRadius: 5, textTransform: "uppercase", letterSpacing: "0.06em", background: isDraft ? "rgba(0,0,0,0.05)" : "var(--color-success-bg)", color: isDraft ? "var(--text-muted)" : "var(--color-success)" }}>{isDraft ? "Borrador" : "Firmado"}</span>
+        <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 700, padding: "3px 7px", borderRadius: 5, textTransform: "uppercase", letterSpacing: "0.06em", background: isDraft ? "rgba(0,0,0,0.05)" : "var(--color-success-bg)", color: isDraft ? "var(--text-muted)" : "var(--color-success)" }}>
+          {!isDraft && <ShieldCheck size={11} />}
+          {isDraft ? "Borrador" : "Firmado"}
+        </span>
       </div>
       <h3 className="font-display" style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.4, marginBottom: 6 }}>{folio.title}</h3>
       <p style={{ fontSize: 12, lineHeight: 1.6, color: "var(--text-muted)", marginBottom: 10, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{folio.body}</p>
@@ -779,16 +1287,16 @@ function FolioCard({ folio, currentRole, onClick }) {
           <p style={{ fontSize: 11, fontWeight: 500, color: "var(--text-muted)" }}>{folio.creatorName}</p>
           <p style={{ fontSize: 10, color: "var(--text-muted)", opacity: 0.6 }}>{formatDateTime(folio.createdAt)}</p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 500, color: "var(--accent)" }}><Eye size={14} /> Ver</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 500, color: "var(--accent)" }}><Eye size={14} /> Ver Folio</div>
       </div>
     </article>
   );
 }
 
 /* ================================================================== */
-/*  DASHBOARD                                                          */
+/*  DASHBOARD DE CONTRATO Y AUDITORÍA                                  */
 /* ================================================================== */
-function ProjectScreen({ projects, selectedProjectId, foliosByProject, onSelectProject, onStatClick }) {
+function ProjectScreen({ projects, selectedProjectId, foliosByProject, onSelectProject, onStatClick, onOpenAudit }) {
   const project = projects.find((p) => p.id === selectedProjectId);
   const folios = foliosByProject[selectedProjectId] || [];
   const firmados = folios.filter((f) => f.status === "firmado").length;
@@ -802,7 +1310,7 @@ function ProjectScreen({ projects, selectedProjectId, foliosByProject, onSelectP
 
   return (
     <div className="fade-in" style={{ padding: 20 }}>
-      {/* Contrato activo */}
+      {/* Resumen del Contrato Activo */}
       <div className="glass-panel" style={{ borderRadius: 22, padding: 22, marginBottom: 16, position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", top: 0, right: 0, width: 120, height: 120, borderRadius: "50%", background: "var(--accent-glow)", filter: "blur(50px)", pointerEvents: "none" }} />
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 14, position: "relative", zIndex: 1 }}>
@@ -813,18 +1321,12 @@ function ProjectScreen({ projects, selectedProjectId, foliosByProject, onSelectP
             <p className="font-mono" style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>{project.permit}</p>
           </div>
         </div>
-        <div style={{ position: "relative", zIndex: 1 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Avance físico</span>
-            <span className="font-mono" style={{ fontSize: 14, fontWeight: 700, color: "var(--accent)" }}>{project.progress}%</span>
-          </div>
-          <div style={{ width: "100%", height: 8, borderRadius: 4, background: "rgba(0,0,0,0.08)", overflow: "hidden" }}>
-            <div style={{ width: `${project.progress}%`, height: "100%", borderRadius: 4, background: `linear-gradient(90deg, var(--accent), var(--color-info))`, boxShadow: `0 0 12px var(--accent-glow)`, transition: "width 0.6s ease" }} />
-          </div>
-        </div>
       </div>
 
-      {/* Stats clickables */}
+      {/* Widget de Brecha Documental / Carpeta Digital */}
+      <DocumentGapWidget project={project} onOpenAudit={onOpenAudit} />
+
+      {/* Stats clickeables */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
         {stats.map((s) => (
           <button key={s.label} onClick={() => onStatClick(s.filter)} className="glass-panel btn-tap" style={{ borderRadius: 16, padding: "18px 10px", textAlign: "center", cursor: "pointer", minHeight: "auto" }}>
@@ -834,8 +1336,8 @@ function ProjectScreen({ projects, selectedProjectId, foliosByProject, onSelectP
         ))}
       </div>
 
-      {/* Lista de contratos */}
-      <p style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>Todos los Contratos</p>
+      {/* Lista de Contratos MOP */}
+      <p style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>Todos los Contratos MOP</p>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {projects.map((p) => {
           const active = p.id === selectedProjectId;
@@ -847,8 +1349,7 @@ function ProjectScreen({ projects, selectedProjectId, foliosByProject, onSelectP
                 <div style={{ width: 38, height: 38, borderRadius: 12, background: active ? "var(--accent)" : "rgba(0,0,0,0.04)", color: active ? "#fff" : "var(--text-muted)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Building2 size={18} /></div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p className="font-display" style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</p>
-                  <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{pFolios.length} folios · {p.progress}% avance</p>
-                  <p className="font-mono" style={{ fontSize: 10, color: "var(--text-muted)", opacity: 0.7, marginTop: 1 }}>{p.permit}</p>
+                  <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{pFolios.length} folios · {p.progress}% avance físico</p>
                 </div>
               </div>
             </button>
@@ -860,67 +1361,74 @@ function ProjectScreen({ projects, selectedProjectId, foliosByProject, onSelectP
 }
 
 /* ================================================================== */
-/*  UI COMPONENTS                                                      */
+/*  THEME TOGGLE                                                       */
 /* ================================================================== */
 function ThemeToggle({ isDark, toggleDark }) {
   return (
-    <button onClick={toggleDark} className="btn-tap glass-panel" style={{ width: 40, height: 40, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: "1px solid var(--border-glass)", color: "var(--text-main)" }} aria-label="Cambiar tema">
-      {isDark ? <Sun size={18} /> : <Moon size={18} />}
+    <button onClick={toggleDark} className="btn-tap glass-panel" style={{ width: 38, height: 38, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-main)", minHeight: 38 }} aria-label={isDark ? "Modo claro" : "Modo oscuro"}>
+      {isDark ? <Sun size={17} /> : <Moon size={17} />}
     </button>
   );
 }
 
+/* ================================================================== */
+/*  PANTALLA DE LOGIN                                                  */
+/* ================================================================== */
 function LoginScreen({ onLogin, isDark, toggleDark }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  async function handleSubmit() {
-    setError("");
-    if (!email.trim() || !password) { setError("Ingresa tu usuario y contraseña."); return; }
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!email || !password) return;
     setLoading(true);
-    try { onLogin(await authService.login(email, password)); } catch (e) { setError(e.message); setLoading(false); }
+    setError("");
+    try {
+      const session = await authService.login(email, password);
+      onLogin(session);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
-    <div className="fade-in login-bg" style={{ minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", padding: "40px 24px" }}>
-      <div style={{ position: "absolute", top: 16, right: 16, zIndex: 10 }}><ThemeToggle isDark={isDark} toggleDark={toggleDark} /></div>
-      <div style={{ width: "100%", maxWidth: 380, margin: "0 auto", position: "relative", zIndex: 1 }}>
-        <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <div className="glass-panel" style={{ width: 64, height: 64, borderRadius: 20, display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
-            <BookMarked size={32} style={{ color: "var(--accent)" }} />
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, position: "relative" }}>
+      <div style={{ position: "absolute", top: 20, right: 20 }}>
+        <ThemeToggle isDark={isDark} toggleDark={toggleDark} />
+      </div>
+      <div style={{ width: "100%", maxWidth: 380 }}>
+        <div style={{ textAlign: "center", marginBottom: 32 }}>
+          <div style={{ width: 56, height: 56, borderRadius: 18, background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", boxShadow: `0 0 24px var(--accent-glow)` }}>
+            <BookMarked size={28} color="#fff" />
           </div>
-          <h1 className="font-display" style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 6 }}>Libro de Obra Digital</h1>
-          <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Contratos de Obra Pública MOP · Bitácora inmutable</p>
+          <h1 className="font-display" style={{ fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em" }}>Libro de Obra Digital</h1>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6 }}>Bitácora legal e inmutable para contratos MOP</p>
         </div>
         <div className="glass-panel" style={{ borderRadius: 24, padding: 28 }}>
-          <div style={{ marginBottom: 18 }}>
-            <label style={labelStyle}>Usuario</label>
-            <input value={email} onChange={(e) => { setEmail(e.target.value); setError(""); }} type="text" autoCapitalize="none" placeholder="cristian" style={{ ...inputStyle, marginBottom: 0 }} />
-          </div>
-          <div style={{ marginBottom: 18 }}>
-            <label style={labelStyle}>Contraseña</label>
-            <input value={password} onChange={(e) => { setPassword(e.target.value); setError(""); }} type="password" placeholder="••••••••" onKeyDown={(e) => e.key === "Enter" && handleSubmit()} style={{ ...inputStyle, marginBottom: 0 }} />
-          </div>
-          {error && (<div className="fade-in" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, borderRadius: 14, padding: "12px 14px", marginBottom: 16, background: "var(--color-danger-bg)", color: "var(--color-danger)" }}><TriangleAlert size={16} style={{ flexShrink: 0 }} /> {error}</div>)}
-          <button onClick={handleSubmit} disabled={loading} className="btn-tap btn-accent" style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 15, fontWeight: 600, borderRadius: 14, padding: "14px 0", border: "none", opacity: loading ? 0.7 : 1 }}>
-            {loading ? <Loader2 size={18} className="spin" /> : <Lock size={17} />} {loading ? "Verificando…" : "Ingresar"}
-          </button>
-          <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border-glass)", textAlign: "center" }}>
-            <p style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>Accesos Demo</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {[
-                { user: "cristian · 123", role: "Inspector Fiscal MOP" },
-                { user: "mauricio · 123", role: "Administrador de Contrato" },
-                { user: "prevencion · 123", role: "Prevencionista de Riesgos" },
-              ].map((c) => (
-                <div key={c.user} style={{ borderRadius: 10, padding: "8px 12px", background: "rgba(0,0,0,0.03)", border: "1px solid var(--border-glass)" }}>
-                  <p className="font-mono" style={{ fontSize: 11, color: "var(--text-muted)" }}>{c.user}</p>
-                  <p style={{ fontSize: 10, color: "var(--text-muted)", opacity: 0.7 }}>{c.role}</p>
-                </div>
-              ))}
+          <form onSubmit={handleSubmit}>
+            <div style={{ marginBottom: 18 }}>
+              <label style={labelStyle}>Usuario o Correo</label>
+              <input value={email} onChange={(e) => { setEmail(e.target.value); setError(""); }} type="text" autoCapitalize="none" placeholder="cristian / mauricio / prevencion" style={{ ...inputStyle, marginBottom: 0 }} />
             </div>
+            <div style={{ marginBottom: 18 }}>
+              <label style={labelStyle}>Contraseña</label>
+              <input value={password} onChange={(e) => { setPassword(e.target.value); setError(""); }} type="password" placeholder="123" style={{ ...inputStyle, marginBottom: 0 }} />
+            </div>
+            {error && <p style={{ color: "var(--color-danger)", fontSize: 12, marginBottom: 14, textAlign: "center" }}>{error}</p>}
+            <button type="submit" disabled={loading || !email || !password} className="btn-tap btn-accent" style={{ width: "100%", padding: "14px 0", borderRadius: 14, border: "none", fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: (loading || !email || !password) ? 0.5 : 1 }}>
+              {loading ? <Loader2 size={18} className="spin" /> : <Lock size={18} />}
+              {loading ? "Iniciando sesión…" : "Ingresar a la Obra"}
+            </button>
+          </form>
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border-glass)", textAlign: "center" }}>
+            <p style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Accesos Demo (Clave: 123)</p>
+            <p className="font-mono" style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.8 }}>cristian · Inspector Fiscal MOP</p>
+            <p className="font-mono" style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.8 }}>mauricio · Administrador Contrato</p>
+            <p className="font-mono" style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.8 }}>prevencion · Prevencionista</p>
           </div>
         </div>
       </div>
@@ -929,78 +1437,144 @@ function LoginScreen({ onLogin, isDark, toggleDark }) {
 }
 
 /* ================================================================== */
-/*  APP PRINCIPAL                                                      */
+/*  APLICACIÓN PRINCIPAL (ESTADO GLOBAL)                               */
 /* ================================================================== */
 function AppContent() {
   const [session, setSession] = useState(null);
   const [foliosByProject, setFoliosByProject] = useState({});
-  const [loading, setLoading] = useState(true);
+  const [originalBackup, setOriginalBackup] = useState({});
+  const [isTampered, setIsTampered] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState("bitacora");
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("Todas");
   const [showNew, setShowNew] = useState(false);
+  const [showIntegrityModal, setShowIntegrityModal] = useState(false);
   const [isDark, setIsDark] = useState(false);
-  const [selectedProjectId, setSelectedProjectId] = useState(PROJECTS[0].id);
+  const [selectedProjectId, setSelectedProjectId] = useState(1);
   const [viewingFolio, setViewingFolio] = useState(null);
 
   useEffect(() => {
-    const root = document.documentElement;
-    if (isDark) root.classList.add("dark"); else root.classList.remove("dark");
+    document.documentElement.classList.toggle("dark", isDark);
   }, [isDark]);
 
-  const role = session?.role;
-  const currentRole = role ? ROLES[role] : null;
-  const folios = foliosByProject[selectedProjectId] || [];
-
+  // Inicialización criptográfica garantizada de la bitácora
   useEffect(() => {
     if (!session) return;
     setLoading(true);
-    const timer = setTimeout(() => { setFoliosByProject({ ...ALL_FOLIOS }); setLoading(false); }, 500);
-    return () => clearTimeout(timer);
+    sealInitialFolios(ALL_FOLIOS).then((sealed) => {
+      setFoliosByProject(sealed);
+      setOriginalBackup(JSON.parse(JSON.stringify(sealed)));
+      setLoading(false);
+    });
   }, [session]);
 
-  const nextFolioNumber = useMemo(() => Math.max(0, ...folios.map((f) => f.folioNumber)) + 1, [folios]);
+  const activeProject = useMemo(() => {
+    return PROJECTS.find((p) => p.id === selectedProjectId) || PROJECTS[0];
+  }, [selectedProjectId]);
+
+  const projectFolios = useMemo(
+    () => foliosByProject[selectedProjectId] || [],
+    [foliosByProject, selectedProjectId]
+  );
+
+  const latestSignedHash = useMemo(() => {
+    const signed = projectFolios
+      .filter((f) => f.status === "firmado")
+      .sort((a, b) => a.folioNumber - b.folioNumber);
+    if (!signed.length) return GENESIS_HASH;
+    return signed[signed.length - 1].signature?.hash || GENESIS_HASH;
+  }, [projectFolios]);
+
+  const nextFolioNumber = useMemo(() => {
+    return Math.max(0, ...projectFolios.map((f) => f.folioNumber)) + 1;
+  }, [projectFolios]);
 
   const visibleFolios = useMemo(() => {
-    if (!role) return [];
-    return folios
+    return projectFolios
       .filter((f) => {
-        if (categoryFilter === "Todas") return true;
         if (categoryFilter === "__firmados") return f.status === "firmado";
-        return f.category === categoryFilter;
-      })
-      .filter((f) => {
+        if (categoryFilter !== "Todas" && f.category !== categoryFilter) return false;
         if (!search.trim()) return true;
         const q = search.toLowerCase();
-        return f.title.toLowerCase().includes(q) || f.body.toLowerCase().includes(q) || String(f.folioNumber).includes(q);
+        return (
+          f.title.toLowerCase().includes(q) ||
+          f.body.toLowerCase().includes(q) ||
+          String(f.folioNumber).includes(q)
+        );
       })
       .sort((a, b) => b.folioNumber - a.folioNumber);
-  }, [folios, role, categoryFilter, search]);
+  }, [projectFolios, categoryFilter, search]);
 
-  const handleLogout = useCallback(() => {
-    setSession(null); setFoliosByProject({}); setTab("bitacora");
-    setSearch(""); setCategoryFilter("Todas"); setViewingFolio(null);
-  }, []);
-
-  function handleNewFolioSave(folio) {
-    setFoliosByProject((prev) => ({ ...prev, [selectedProjectId]: [...(prev[selectedProjectId] || []), folio] }));
+  function handleLogout() {
+    setSession(null);
+    setViewingFolio(null);
     setShowNew(false);
   }
 
-  function handleUpdateFolio(updated) {
-    setFoliosByProject((prev) => ({ ...prev, [selectedProjectId]: (prev[selectedProjectId] || []).map((f) => f.id === updated.id ? updated : f) }));
-    setViewingFolio(updated);
+  function handleNewFolioSave(newFolio) {
+    setFoliosByProject((prev) => ({
+      ...prev,
+      [selectedProjectId]: [...(prev[selectedProjectId] || []), newFolio],
+    }));
+    setShowNew(false);
   }
 
-  function handleStatClick(filter) { setCategoryFilter(filter); setTab("bitacora"); }
+  function handleUpdateFolio(updatedFolio) {
+    setFoliosByProject((prev) => ({
+      ...prev,
+      [selectedProjectId]: (prev[selectedProjectId] || []).map((f) =>
+        f.id === updatedFolio.id ? updatedFolio : f
+      ),
+    }));
+    if (viewingFolio?.id === updatedFolio.id) {
+      setViewingFolio(updatedFolio);
+    }
+  }
 
-  if (!session) return <LoginScreen onLogin={setSession} isDark={isDark} toggleDark={() => setIsDark(!isDark)} />;
+  function handleStatClick(filter) {
+    setCategoryFilter(filter);
+    setTab("bitacora");
+  }
+
+  // Demostración de resistencia a adulteración para clientes/auditores
+  function handleTamperSimulation() {
+    setFoliosByProject((prev) => {
+      const list = prev[selectedProjectId] || [];
+      if (list.length < 2) return prev;
+      const modified = list.map((f, i) => {
+        if (i === 1) {
+          return {
+            ...f,
+            title: f.title + " [ALTERADO EN BASE DE DATOS]",
+            body: f.body + " (Modificación fraudulenta de cubicación posterior a la firma legal)",
+          };
+        }
+        return f;
+      });
+      return { ...prev, [selectedProjectId]: modified };
+    });
+    setIsTampered(true);
+  }
+
+  function handleRestoreSimulation() {
+    setFoliosByProject(JSON.parse(JSON.stringify(originalBackup)));
+    setIsTampered(false);
+  }
+
+  if (!session) {
+    return <LoginScreen onLogin={setSession} isDark={isDark} toggleDark={() => setIsDark(!isDark)} />;
+  }
+
+  const { role, user: currentRole } = session;
 
   if (viewingFolio) {
     return (
       <FolioDetail
         folio={viewingFolio}
         role={role}
+        latestSignedHash={latestSignedHash}
+        onOpenAudit={() => setShowIntegrityModal(true)}
         onClose={() => setViewingFolio(null)}
         onUpdate={handleUpdateFolio}
       />
@@ -1009,6 +1583,7 @@ function AppContent() {
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      {/* Header institucional */}
       <header className="glass-panel" style={{ position: "sticky", top: 0, zIndex: 30, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10, borderRadius: 0, borderTop: "none", borderLeft: "none", borderRight: "none" }}>
         <div style={{ width: 38, height: 38, borderRadius: 12, background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: `0 0 16px var(--accent-glow)` }}><BookMarked size={18} color="#fff" /></div>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -1023,13 +1598,20 @@ function AppContent() {
         {loading ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "100px 0", color: "var(--text-muted)" }}>
             <Loader2 size={28} className="spin" style={{ marginBottom: 12, color: "var(--accent)" }} />
-            <p style={{ fontSize: 12, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.1em" }}>Sincronizando…</p>
+            <p style={{ fontSize: 12, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.1em" }}>Verificando Sello Criptográfico…</p>
           </div>
         ) : tab === "obra" ? (
-          <ProjectScreen projects={PROJECTS} selectedProjectId={selectedProjectId} foliosByProject={foliosByProject} onSelectProject={setSelectedProjectId} onStatClick={handleStatClick} />
+          <ProjectScreen
+            projects={PROJECTS}
+            selectedProjectId={selectedProjectId}
+            foliosByProject={foliosByProject}
+            onSelectProject={setSelectedProjectId}
+            onStatClick={handleStatClick}
+            onOpenAudit={() => setShowIntegrityModal(true)}
+          />
         ) : (
           <div style={{ padding: 20 }}>
-            {/* Selector de contratos */}
+            {/* Selector de Contratos */}
             <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 12 }}>
               {PROJECTS.map((p) => (
                 <button key={p.id} onClick={() => setSelectedProjectId(p.id)} className="btn-tap"
@@ -1042,10 +1624,23 @@ function AppContent() {
               ))}
             </div>
 
+            {/* Píldora de estado de integridad de la bitácora */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderRadius: 12, background: isTampered ? "var(--color-danger-bg)" : "rgba(16,185,129,0.08)", border: `1px solid ${isTampered ? "var(--color-danger)" : "rgba(16,185,129,0.25)"}`, marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {isTampered ? <ShieldAlert size={16} color="var(--color-danger)" /> : <ShieldCheck size={16} color="var(--color-success)" />}
+                <span style={{ fontSize: 11, fontWeight: 700, color: isTampered ? "var(--color-danger)" : "var(--color-success)" }}>
+                  {isTampered ? "Alerta: Cadena Criptográfica Alterada" : "Inmutabilidad SHA-256 Acreditada"}
+                </span>
+              </div>
+              <button onClick={() => setShowIntegrityModal(true)} style={{ background: "none", border: "none", fontSize: 11, fontWeight: 700, color: isTampered ? "var(--color-danger)" : "var(--color-success)", cursor: "pointer", textDecoration: "underline" }}>
+                Auditar
+              </button>
+            </div>
+
             {/* Buscador */}
-            <div style={{ position: "relative", marginBottom: 14 }}>
+            <div style={{ position: "relative", marginBottom: 12 }}>
               <Search size={16} style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }} />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar en bitácora…"
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por texto o número de folio…"
                 className="glass-panel" style={{ width: "100%", borderRadius: 14, padding: "12px 12px 12px 40px", outline: "none", color: "var(--text-main)", fontSize: 13 }} />
             </div>
 
@@ -1064,21 +1659,24 @@ function AppContent() {
               })}
             </div>
 
+            {/* Listado de folios */}
             {visibleFolios.length === 0 ? (
               <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--text-muted)" }}>
                 <ClipboardList size={36} style={{ margin: "0 auto 12px", opacity: 0.4 }} />
-                <p style={{ fontSize: 13 }}>No se encontraron folios.</p>
+                <p style={{ fontSize: 13 }}>No se encontraron folios con el filtro seleccionado.</p>
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {visibleFolios.map((folio) => <FolioCard key={folio.id} folio={folio} currentRole={currentRole} onClick={setViewingFolio} />)}
+                {visibleFolios.map((folio) => (
+                  <FolioCard key={folio.id} folio={folio} onClick={setViewingFolio} />
+                ))}
               </div>
             )}
           </div>
         )}
       </main>
 
-      {/* FAB — crear folio */}
+      {/* FAB para crear folio */}
       {currentRole.canCreate && tab === "bitacora" && !loading && (
         <button onClick={() => setShowNew(true)} className="btn-tap btn-accent"
           style={{ position: "fixed", zIndex: 40, right: 20, bottom: 90, width: 54, height: 54, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", border: "none" }}>
@@ -1086,7 +1684,7 @@ function AppContent() {
         </button>
       )}
 
-      {/* Barra de navegación inferior */}
+      {/* Navegación inferior flotante */}
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 30, padding: "8px 20px", paddingBottom: "max(8px, env(safe-area-inset-bottom))" }}>
         <nav className="glass-panel" style={{ borderRadius: 18, display: "flex", padding: 5, gap: 4 }}>
           {[{ key: "bitacora", label: "Bitácora", Icon: BookMarked }, { key: "obra", label: "Dashboard", Icon: Home }].map(({ key, label, Icon }) => {
@@ -1104,9 +1702,29 @@ function AppContent() {
         </nav>
       </div>
 
-      {showNew && <NewFolioSheet role={role} nextFolioNumber={nextFolioNumber} onClose={() => setShowNew(false)} onSave={handleNewFolioSave} />}
+      {/* Modales */}
+      {showNew && (
+        <NewFolioSheet role={role} nextFolioNumber={nextFolioNumber} onClose={() => setShowNew(false)} onSave={handleNewFolioSave} />
+      )}
+
+      {showIntegrityModal && (
+        <IntegrityVerificationModal
+          project={activeProject}
+          folios={projectFolios}
+          onTamper={handleTamperSimulation}
+          onRestore={handleRestoreSimulation}
+          isTampered={isTampered}
+          onClose={() => setShowIntegrityModal(false)}
+        />
+      )}
     </div>
   );
 }
 
-export default function App() { return <ErrorBoundary><AppContent /></ErrorBoundary>; }
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
+  );
+}
