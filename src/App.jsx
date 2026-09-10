@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import {
-  Building2, MapPin, Hash, TrendingUp, Search, Plus, X, ChevronLeft,
-  CircleCheck, CircleX, TriangleAlert, Link2, ClipboardList,
-  RefreshCcw, Lock, LogOut, BookMarked, Loader2, Home,
-  Sun, Moon, Camera, Image, Save, Edit3, Eye,
-  ShieldCheck, Fingerprint, KeyRound, FileSignature, CheckCheck,
+  Building2, MapPin, TrendingUp, Search, Plus, X, ChevronLeft, ChevronRight,
+  CircleCheck, CircleX, TriangleAlert, ClipboardList, HardHat,
+  Lock, LogOut, BookMarked, Loader2, Home, ShieldCheck, ShieldAlert,
+  Sun, Moon, Camera, Image, Save, Edit3, Eye, Fingerprint, KeyRound,
+  FileSignature, ScrollText, MessageSquare, FileText,
 } from "lucide-react";
 
 /* ================================================================== */
@@ -30,291 +30,452 @@ class ErrorBoundary extends React.Component {
 }
 
 /* ================================================================== */
-/*  CONFIGURACIÓN — dominio obra pública MOP                           */
+/*  CONFIGURACIÓN DE DOMINIO — OBRA PÚBLICA (MOP)                      */
 /* ================================================================== */
 
-const CATEGORY_CONFIG = {
-  Instrucción:            { color: "var(--color-info)",    bg: "var(--color-info-bg)",    Icon: ClipboardList },
-  Avance:                 { color: "#2563EB",               bg: "rgba(37,99,235,0.12)",    Icon: TrendingUp },
-  "Recepción de Partida": { color: "var(--color-success)", bg: "var(--color-success-bg)", Icon: CircleCheck },
-  Incidente:              { color: "var(--color-danger)",  bg: "var(--color-danger-bg)",  Icon: TriangleAlert },
-  Modificación:           { color: "var(--color-warning)", bg: "var(--color-warning-bg)", Icon: RefreshCcw },
+/** Libros paralelos del contrato. Cada uno tiene su propio correlativo
+ *  y un único rol habilitado para escribir en él. Todos los perfiles
+ *  leen la totalidad de los libros. */
+const LIBROS = {
+  maestro: { clave: "maestro", nombre: "Libro de Obras Maestro", corto: "Maestro", escribe: "Inspector Fiscal", Icon: ScrollText },
+  comunicaciones: { clave: "comunicaciones", nombre: "Libro de Comunicaciones", corto: "Comunicaciones", escribe: "Administrador de Contrato", Icon: MessageSquare },
+  prevencion: { clave: "prevencion", nombre: "Libro de Prevención de Riesgos", corto: "Prevención", escribe: "Prevencionista de Riesgos", Icon: HardHat },
 };
 
-// Roles — dominio obra pública MOP
+const CATEGORIAS = {
+  "Instrucción Inspector Fiscal": { corto: "Instrucción", color: "var(--color-info)", bg: "var(--color-info-bg)", Icon: ClipboardList },
+  "Recepción de Partida": { corto: "Recepción", color: "var(--color-success)", bg: "var(--color-success-bg)", Icon: CircleCheck },
+  "Incidente de Obra": { corto: "Incidente", color: "var(--color-danger)", bg: "var(--color-danger-bg)", Icon: TriangleAlert },
+  "Avance Diario": { corto: "Avance", color: "#2563EB", bg: "rgba(37,99,235,0.12)", Icon: TrendingUp },
+  "Seguridad y Medio Ambiente": { corto: "Seguridad", color: "var(--color-warning)", bg: "var(--color-warning-bg)", Icon: HardHat },
+};
+
+/** Categorías sobre las que el Inspector Fiscal puede pronunciarse. */
+const CATEGORIAS_RESOLUBLES = ["Recepción de Partida", "Incidente de Obra", "Seguridad y Medio Ambiente"];
+
 const ROLES = {
   inspector_fiscal: {
-    label: "Inspector Fiscal MOP",
-    short: "I.F.",
-    name: "Cristián Manríquez",
-    canCreate: true,
-    canResolve: true,   // Aprueba/rechaza recepciones e incidentes del contratista
-    categories: ["Instrucción", "Incidente", "Recepción de Partida"],
+    clave: "inspector_fiscal",
+    label: "Inspector Fiscal",
+    corto: "Inspector Fiscal",
+    organismo: "MOP · Dirección de Vialidad",
+    nombre: "Cristián Manríquez",
+    escribeEn: ["maestro"],
+    puedeResolver: true,
+    categorias: ["Instrucción Inspector Fiscal", "Recepción de Partida", "Incidente de Obra"],
   },
   admin_contrato: {
+    clave: "admin_contrato",
     label: "Administrador de Contrato",
-    short: "A.C.",
-    name: "Mauricio Jilabert",
-    canCreate: true,
-    canResolve: false,
-    categories: ["Avance", "Incidente", "Modificación", "Recepción de Partida"],
+    corto: "Adm. Contrato",
+    organismo: "Empresa Contratista",
+    nombre: "Mauricio Cáceres",
+    escribeEn: ["comunicaciones"],
+    puedeResolver: false,
+    categorias: ["Avance Diario", "Recepción de Partida", "Incidente de Obra"],
   },
   prevencionista: {
+    clave: "prevencionista",
     label: "Prevencionista de Riesgos",
-    short: "P.R.",
-    name: "Luis Parra",
-    canCreate: true,
-    canResolve: false,
-    categories: ["Incidente"],
+    corto: "Prevencionista",
+    organismo: "Empresa Contratista",
+    nombre: "Luciano Sepúlveda",
+    escribeEn: ["prevencion"],
+    puedeResolver: false,
+    categorias: ["Seguridad y Medio Ambiente", "Incidente de Obra"],
   },
 };
 
-// Credenciales demo — 3 roles
-const MOCK_CREDENTIALS = {
-  "cristian":   { password: "123", role: "inspector_fiscal" },
-  "mauricio":   { password: "123", role: "admin_contrato" },
-  "prevencion": { password: "123", role: "prevencionista" },
+const CREDENCIALES = {
+  cristian: { clave: "123", rol: "inspector_fiscal" },
+  mauricio: { clave: "123", rol: "admin_contrato" },
+  prevencion: { clave: "123", rol: "prevencionista" },
 };
 
-// Contratos — obra pública MOP (no DOM municipal)
-const PROJECTS = [
+const CONTRATOS = [
   {
-    id: 1,
-    name: "Mejoramiento Ruta 5 Norte, Huentelauquén",
-    address: "Ruta 5 Norte, km 392–418, Región de Coquimbo",
-    permit: "MOP-VIALIDAD-0842/2025",
-    progress: 47,
+    id: 1, codigo: "MOP-VIALIDAD-0842/2025",
+    nombre: "Mejoramiento Ruta 5 Sur, sector Molina – San Rafael",
+    ubicacion: "Ruta 5 Sur, dm 4.000 al dm 6.200 · Región del Maule",
+    contratista: "Constructora Andes Sur S.A.",
+    monto: "UF 184.500", plazo: "540 días corridos", avance: 47,
   },
   {
-    id: 2,
-    name: "Construcción Puente Sobre Río Toltén",
-    address: "Ruta 199, km 12, Temuco, Araucanía",
-    permit: "MOP-VIALIDAD-0317/2025",
-    progress: 21,
+    id: 2, codigo: "MOP-VIALIDAD-0317/2025",
+    nombre: "Reposición Puente Toltén",
+    ubicacion: "Ruta S-40, comuna de Teodoro Schmidt · Región de La Araucanía",
+    contratista: "Ingeniería y Construcción Biobío Ltda.",
+    monto: "UF 96.200", plazo: "420 días corridos", avance: 23,
   },
   {
-    id: 3,
-    name: "Habilitación Camino a Porvenir, T. del Fuego",
-    address: "Ruta Y-71, km 0–45, Región de Magallanes",
-    permit: "MOP-VIALIDAD-1103/2024",
-    progress: 88,
+    id: 3, codigo: "MOP-ARQ-0158/2024",
+    nombre: "Construcción Edificio Consistorial de Puerto Aysén",
+    ubicacion: "Calle Sargento Aldea 480, Puerto Aysén · Región de Aysén",
+    contratista: "Constructora Patagonia Austral SpA",
+    monto: "UF 142.800", plazo: "600 días corridos", avance: 68,
   },
   {
-    id: 4,
-    name: "Edificio de Servicios MOP, Aysén",
-    address: "Av. Baquedano 650, Coyhaique, Región de Aysén",
-    permit: "MOP-ARQ-0056/2025",
-    progress: 9,
+    id: 4, codigo: "MOP-VIALIDAD-0521/2024",
+    nombre: "Conservación Global Camino Porvenir – Cerro Sombrero",
+    ubicacion: "Ruta Y-71, Tierra del Fuego · Región de Magallanes",
+    contratista: "Obras Civiles Magallanes S.A.",
+    monto: "UF 78.400", plazo: "365 días corridos", avance: 81,
   },
 ];
 
-// Folios demo — lenguaje real de obra pública MOP
-const ALL_FOLIOS = {
+const IF_NOMBRE = ROLES.inspector_fiscal.nombre;
+const AC_NOMBRE = ROLES.admin_contrato.nombre;
+const PR_NOMBRE = ROLES.prevencionista.nombre;
+
+function base(o) {
+  return { fotos: [], geo: null, refFolio: null, resolucion: null, firma: null, firmadoEn: null, ...o };
+}
+
+const FOLIOS_DEMO = {
   1: [
-    {
-      id: 11, folioNumber: 1,
-      category: "Instrucción",
-      title: "Instrucción de refuerzo de berma sur km 401,2",
-      body: "El Inspector Fiscal instruye reforzar la berma del costado sur en el km 401,2 de la Ruta 5 Norte, cuyo talud presenta socavación por escorrentía. Se exige berma mínima de 2,0 m y compactación al 95% de la densidad Proctor. Plazo de ejecución: 5 días hábiles desde la presente instrucción, conforme al Art. 64 del RCOP.",
-      resultado: null, creatorRole: "inspector_fiscal", creatorName: "Cristián Manríquez",
-      createdAt: "2026-08-05T09:10:00", status: "firmado", signedAt: "2026-08-05T09:18:00",
-      signature: { code: "MOP-2025-001-KR" }, refFolio: null, geo: { lat: -31.6021, lng: -71.5432 }, photos: [], comments: [],
-    },
-    {
-      id: 12, folioNumber: 2,
-      category: "Avance",
-      title: "Avance de excavación caja vial km 395–399",
-      body: "El Administrador de Contrato informa término de la excavación de caja vial entre los km 395 y km 399 de la Ruta 5 Norte. Volumen ejecutado: 12.400 m³ de un total de 26.000 m³ proyectados para el tramo. Se adjuntan cubicaciones diarias. Avance físico acumulado en partida de excavación: 47,7%.",
-      resultado: null, creatorRole: "admin_contrato", creatorName: "Mauricio Jilabert",
-      createdAt: "2026-08-12T16:30:00", status: "firmado", signedAt: "2026-08-12T16:38:00",
-      signature: { code: "MOP-2025-002-LN" }, refFolio: null, geo: null, photos: [], comments: [],
-    },
-    {
-      id: 13, folioNumber: 3,
-      category: "Incidente",
-      title: "Volcamiento de camión aljibe km 403,7",
-      body: "A las 11:35 hrs se produjo el volcamiento de un camión aljibe marca Mercedes-Benz, patente BGJR-17, en el km 403,7 al intentar revertir en zona de pendiente. El operador sufrió contusiones menores y fue trasladado al Hospital de Illapel. Se activa protocolo de accidente según DS 40. Faena paralizada en el sector hasta inspección de carabineros y mutual.",
-      resultado: null, creatorRole: "prevencionista", creatorName: "Luis Parra",
-      createdAt: "2026-08-19T11:52:00", status: "firmado", signedAt: "2026-08-19T12:05:00",
-      signature: { code: "MOP-2025-003-QP" }, refFolio: null, geo: { lat: -31.6198, lng: -71.5501 }, photos: [], comments: [],
-    },
-    {
-      id: 14, folioNumber: 4,
-      category: "Recepción de Partida",
-      title: "Recepción de base granular km 395–398",
-      body: "El Inspector Fiscal verifica en terreno la compactación de la base granular colocada entre los km 395 y km 398. Se realizaron 12 ensayos de densidad in situ con densímetro nuclear: 11 resultados superan el 98% de la densidad máxima Proctor Modificado; 1 ensayo en km 396,4 arrojó 96,8% y fue corregido y reensayado con resultado satisfactorio. Se aprueba la partida para continuar con la subbase asfáltica.",
-      resultado: "Aprobado", creatorRole: "inspector_fiscal", creatorName: "Cristián Manríquez",
-      createdAt: "2026-08-28T10:15:00", status: "firmado", signedAt: "2026-08-28T10:22:00",
-      signature: { code: "MOP-2025-004-TV" }, refFolio: null, geo: null, photos: [], comments: [],
-    },
-    {
-      id: 15, folioNumber: 5,
-      category: "Modificación",
-      title: "Propuesta de cambio de sección transversal km 406–410",
-      body: "El Administrador de Contrato solicita modificar la sección transversal del tramo km 406–410, cambiando de calzada única de 7,3 m a calzada de 6,5 m con bandas de emergencia de 2,0 m a cada costado, dado el ancho del predio expropiado disponible. El cambio debe ser evaluado por el proyectista y aprobado por la Dirección Regional de Vialidad.",
-      resultado: null, creatorRole: "admin_contrato", creatorName: "Mauricio Jilabert",
-      createdAt: "2026-09-02T14:20:00", status: "borrador",
-      signedAt: null, signature: null, refFolio: null, geo: null, photos: [], comments: [],
-    },
+    base({
+      id: 1101, numero: 1, libro: "maestro", categoria: "Instrucción Inspector Fiscal",
+      titulo: "Reperfilado de subrasante entre dm 4.200 y dm 4.850",
+      cuerpo: "Se instruye a la empresa contratista ejecutar el reperfilado y recompactación de la subrasante en el tramo comprendido entre dm 4.200 y dm 4.850, por presentar razón de soporte CBR inferior al 20% exigido en las Especificaciones Técnicas Especiales del contrato. Deberá acreditarse el cumplimiento mediante nuevos ensayos de laboratorio antes de autorizar la colocación de subbase granular. Plazo: 5 días corridos contados desde la presente anotación.",
+      autorRol: "inspector_fiscal", autorNombre: IF_NOMBRE,
+      creadoEn: "2026-08-11T09:20:00", estado: "firmado", firmadoEn: "2026-08-11T09:34:00",
+      firma: { codigo: "MOP-2026-001-QA" },
+    }),
+    base({
+      id: 1102, numero: 2, libro: "maestro", categoria: "Instrucción Inspector Fiscal",
+      titulo: "Reforzamiento de señalización en desvío de tránsito, dm 5.100",
+      cuerpo: "Constatado en visita a terreno que el desvío provisorio habilitado en dm 5.100 no cuenta con la totalidad de la señalización exigida, se instruye reponer los delineadores verticales faltantes, instalar señalética reflectante en ambos accesos y mantener personal banderero en horario de 08:00 a 18:00 hrs. mientras dure la faena. La empresa deberá informar el cumplimiento en el Libro de Comunicaciones.",
+      autorRol: "inspector_fiscal", autorNombre: IF_NOMBRE,
+      creadoEn: "2026-08-24T16:05:00", estado: "firmado", firmadoEn: "2026-08-24T16:12:00",
+      firma: { codigo: "MOP-2026-002-LT" },
+    }),
+    base({
+      id: 1103, numero: 3, libro: "maestro", categoria: "Incidente de Obra",
+      titulo: "Paralización parcial de faena por condiciones climáticas",
+      cuerpo: "Se deja constancia que, producto de precipitaciones superiores a 25 mm en 12 horas, se paralizan las faenas de colocación de carpeta asfáltica entre dm 4.900 y dm 5.400. Se instruye a la empresa contratista adoptar medidas de protección de la subbase expuesta y reponer el cierre perimetral desplazado por escorrentía en el acceso sur.",
+      autorRol: "inspector_fiscal", autorNombre: IF_NOMBRE,
+      creadoEn: "2026-09-08T11:40:00", estado: "borrador",
+    }),
+    base({
+      id: 1201, numero: 1, libro: "comunicaciones", categoria: "Avance Diario",
+      titulo: "Colocación de subbase granular dm 4.200 – dm 4.850",
+      cuerpo: "Se informa el término de la colocación y compactación de subbase granular en el tramo indicado, en espesor de 0,20 m compactado. Se ejecutaron ensayos de densidad in situ N° 114 al 119 mediante método de cono de arena, obteniéndose un promedio de 96,4% de la densidad máxima compactada seca del Proctor Modificado, superior al 95% exigido.",
+      autorRol: "admin_contrato", autorNombre: AC_NOMBRE,
+      creadoEn: "2026-08-19T18:10:00", estado: "firmado", firmadoEn: "2026-08-19T18:22:00",
+      firma: { codigo: "MOP-2026-001-BN" },
+    }),
+    base({
+      id: 1202, numero: 2, libro: "comunicaciones", categoria: "Recepción de Partida",
+      titulo: "Solicitud de recepción de partida: subbase granular dm 4.200 – dm 4.850",
+      cuerpo: "Se solicita a la Inspección Fiscal la recepción de la partida de subbase granular ejecutada entre dm 4.200 y dm 4.850, adjuntándose los certificados del laboratorio de autocontrol y el registro topográfico de espesores. La partida fue ejecutada conforme a la sección 5.301 del Manual de Carreteras, Volumen 5.",
+      autorRol: "admin_contrato", autorNombre: AC_NOMBRE,
+      creadoEn: "2026-08-20T09:05:00", estado: "firmado", firmadoEn: "2026-08-20T09:11:00",
+      firma: { codigo: "MOP-2026-002-CD" },
+      resolucion: {
+        resultado: "Aprobado",
+        observacion: "Se recibe conforme la partida. Los ensayos de densidad y el registro de espesores cumplen lo exigido. Se autoriza el inicio de la colocación de base granular.",
+        porNombre: IF_NOMBRE, porRol: "inspector_fiscal", fecha: "2026-08-21T10:30:00",
+      },
+    }),
+    base({
+      id: 1203, numero: 3, libro: "comunicaciones", categoria: "Avance Diario",
+      titulo: "Hormigonado de losa de aproximación norte, obra de arte dm 5.680",
+      cuerpo: "Se informa la ejecución del hormigonado de la losa de aproximación norte de la obra de arte ubicada en dm 5.680, con hormigón grado H-30, tamaño máximo nominal 20 mm y cono de 8 cm. Volumen colocado: 34,5 m³. Se extrajeron seis probetas cilíndricas para ensayo a compresión a 7 y 28 días conforme a NCh 1017. Curado mediante membrana de curado y riego durante 7 días.",
+      autorRol: "admin_contrato", autorNombre: AC_NOMBRE,
+      creadoEn: "2026-09-02T17:45:00", estado: "firmado", firmadoEn: "2026-09-02T17:58:00",
+      firma: { codigo: "MOP-2026-003-EF" },
+    }),
+    base({
+      id: 1204, numero: 4, libro: "comunicaciones", categoria: "Incidente de Obra",
+      titulo: "Corte no programado de tránsito por volcamiento de camión tolva",
+      cuerpo: "Siendo las 14:20 hrs. se produce el volcamiento de un camión tolva de empresa subcontratista en el acceso norte del desvío provisorio de dm 5.100, sin personal lesionado. Se corta el tránsito en ambos sentidos durante 50 minutos hasta el retiro del vehículo con grúa. Se dio aviso inmediato a Carabineros y a la Inspección Fiscal. Se adjunta registro fotográfico del despeje de la calzada.",
+      autorRol: "admin_contrato", autorNombre: AC_NOMBRE,
+      creadoEn: "2026-09-05T15:30:00", estado: "firmado", firmadoEn: "2026-09-05T15:44:00",
+      firma: { codigo: "MOP-2026-004-GH" },
+    }),
+    base({
+      id: 1301, numero: 1, libro: "prevencion", categoria: "Seguridad y Medio Ambiente",
+      titulo: "Charla diaria de seguridad y verificación de elementos de protección personal",
+      cuerpo: "Se realiza charla de cinco minutos con una dotación de 34 trabajadores, abordando el riesgo de atropello en faenas con tránsito habilitado. Se verifica el uso de casco, chaleco reflectante y calzado de seguridad en la totalidad del personal en terreno. Se detectan dos trabajadores sin protección auditiva en el sector de planta de asfalto, situación corregida en el acto.",
+      autorRol: "prevencionista", autorNombre: PR_NOMBRE,
+      creadoEn: "2026-09-03T08:30:00", estado: "firmado", firmadoEn: "2026-09-03T08:40:00",
+      firma: { codigo: "MOP-2026-001-JK" },
+    }),
+    base({
+      id: 1302, numero: 2, libro: "prevencion", categoria: "Incidente de Obra",
+      titulo: "Cuasi accidente por maquinaria en zona de desvío, dm 5.120",
+      cuerpo: "Se registra cuasi accidente en dm 5.120: retroexcavadora inicia giro de superestructura sin verificar punto ciego, encontrándose un trabajador a aproximadamente 3 metros del radio de giro. No se registran lesionados. Se retira al operador de la faena por la jornada, se refuerza el procedimiento de trabajo seguro y se instruye la verificación de alarma de retroceso audible en toda la maquinaria del contrato.",
+      autorRol: "prevencionista", autorNombre: PR_NOMBRE,
+      creadoEn: "2026-09-06T12:15:00", estado: "firmado", firmadoEn: "2026-09-06T12:29:00",
+      firma: { codigo: "MOP-2026-002-MN" },
+    }),
   ],
   2: [
-    {
-      id: 21, folioNumber: 1,
-      category: "Instrucción",
-      title: "Instrucción de inicio de trabajos y acta de entrega de terreno",
-      body: "El Inspector Fiscal instruye el inicio formal de los trabajos del contrato MOP-VIALIDAD-0317/2025, Construcción Puente Sobre Río Toltén. Se deja constancia de la entrega de terreno realizada el día de hoy, con acceso al sector de emplazamiento en la Ruta 199, km 12. El Administrador de Contrato debe presentar el programa de trabajo definitivo dentro de los 15 días siguientes conforme al Art. 46 del RCOP.",
-      resultado: null, creatorRole: "inspector_fiscal", creatorName: "Cristián Manríquez",
-      createdAt: "2026-07-01T09:00:00", status: "firmado", signedAt: "2026-07-01T09:08:00",
-      signature: { code: "MOP-2025-101-AB" }, refFolio: null, geo: null, photos: [], comments: [],
-    },
-    {
-      id: 22, folioNumber: 2,
-      category: "Avance",
-      title: "Instalación de faenas y campamento",
-      body: "Se informa la instalación completa de las faenas de obra: oficina modular (24 m²), bodega de materiales (48 m²), laboratorio de terreno, baños químicos (6 unidades) y generador de 80 kVA. El cierre perimetral con malla tipo Acmafor se extiende 320 m lineales cubriendo el perímetro del área de trabajo.",
-      resultado: null, creatorRole: "admin_contrato", creatorName: "Mauricio Jilabert",
-      createdAt: "2026-07-10T17:00:00", status: "firmado", signedAt: "2026-07-10T17:09:00",
-      signature: { code: "MOP-2025-102-CD" }, refFolio: null, geo: null, photos: [], comments: [],
-    },
-    {
-      id: 23, folioNumber: 3,
-      category: "Incidente",
-      title: "Hallazgo de restos de cimentación de puente antiguo",
-      body: "Durante las excavaciones para la pila N°2, a 2,3 m de profundidad se detectan restos de cimentación de ciclópeo de un puente anterior no documentado en los planos de referencia. Se paraliza la excavación en el sector y se notifica al proyectista estructural. Se estima un atraso de 5 a 8 días hábiles en la pila N°2.",
-      resultado: null, creatorRole: "admin_contrato", creatorName: "Mauricio Jilabert",
-      createdAt: "2026-07-22T10:45:00", status: "borrador",
-      signedAt: null, signature: null, refFolio: null, geo: null, photos: [], comments: [],
-    },
+    base({
+      id: 2101, numero: 1, libro: "maestro", categoria: "Instrucción Inspector Fiscal",
+      titulo: "Entrega de terreno y autorización de instalación de faena",
+      cuerpo: "Se deja constancia de la entrega de terreno del contrato en el sector de emplazamiento del Puente Toltén, ribera norte y sur. Se autoriza la instalación de faena en el área indicada en el plano de instalación aprobado, debiendo respetarse la franja de protección de vegetación ribereña definida en la Resolución de Calificación Ambiental.",
+      autorRol: "inspector_fiscal", autorNombre: IF_NOMBRE,
+      creadoEn: "2026-07-15T10:00:00", estado: "firmado", firmadoEn: "2026-07-15T10:14:00",
+      firma: { codigo: "MOP-2026-001-PQ" },
+    }),
+    base({
+      id: 2201, numero: 1, libro: "comunicaciones", categoria: "Avance Diario",
+      titulo: "Hinca de pilotes de fundación, cepa N° 2",
+      cuerpo: "Se informa el término de la hinca de los cuatro pilotes de acero de la cepa N° 2, con penetración final entre 18,4 y 19,1 metros bajo el nivel de socavación de diseño. Se adjunta registro de golpes por metro y control de verticalidad. Rechazo alcanzado conforme a lo previsto por el proyectista.",
+      autorRol: "admin_contrato", autorNombre: AC_NOMBRE,
+      creadoEn: "2026-08-28T19:00:00", estado: "firmado", firmadoEn: "2026-08-28T19:20:00",
+      firma: { codigo: "MOP-2026-001-RS" },
+    }),
+    base({
+      id: 2202, numero: 2, libro: "comunicaciones", categoria: "Recepción de Partida",
+      titulo: "Solicitud de recepción de enfierradura de cepa N° 2",
+      cuerpo: "Se solicita la recepción de la enfierradura del coronamiento de la cepa N° 2, ejecutada conforme al plano estructural EST-12 revisión C. Se verificó diámetro, cuantía, traslapos y recubrimiento mínimo de 5 cm. Se solicita autorización para hormigonar dentro de las próximas 48 horas.",
+      autorRol: "admin_contrato", autorNombre: AC_NOMBRE,
+      creadoEn: "2026-09-07T11:20:00", estado: "firmado", firmadoEn: "2026-09-07T11:33:00",
+      firma: { codigo: "MOP-2026-002-TU" },
+    }),
+    base({
+      id: 2301, numero: 1, libro: "prevencion", categoria: "Seguridad y Medio Ambiente",
+      titulo: "Verificación de plan de trabajo sobre agua y elementos de rescate",
+      cuerpo: "Se verifica la disponibilidad de chalecos salvavidas para la totalidad del personal que ejecuta faenas sobre el cauce, la presencia de bote de rescate operativo con motor fuera de borda y la instalación de líneas de vida en las plataformas de trabajo de ambas riberas.",
+      autorRol: "prevencionista", autorNombre: PR_NOMBRE,
+      creadoEn: "2026-09-01T09:10:00", estado: "firmado", firmadoEn: "2026-09-01T09:18:00",
+      firma: { codigo: "MOP-2026-001-VW" },
+    }),
   ],
   3: [
-    {
-      id: 31, folioNumber: 1,
-      category: "Avance",
-      title: "Término de escarpe y limpieza de faja vial km 0–22",
-      body: "Se informa la finalización del escarpe y limpieza de la faja vial entre los km 0 y km 22 del camino a Porvenir. Se removieron 3.200 m³ de material orgánico y vegetación. El material no apto fue depositado en el botadero autorizado B-01 (53°31'S / 70°52'O). La faena se desarrolló sin incidentes de seguridad.",
-      resultado: null, creatorRole: "admin_contrato", creatorName: "Mauricio Jilabert",
-      createdAt: "2026-04-15T16:20:00", status: "firmado", signedAt: "2026-04-15T16:30:00",
-      signature: { code: "MOP-2024-201-EF" }, refFolio: null, geo: null, photos: [], comments: [],
-    },
-    {
-      id: 32, folioNumber: 2,
-      category: "Recepción de Partida",
-      title: "Recepción de terraplén km 0–15",
-      body: "El Inspector Fiscal verifica la construcción del terraplén entre km 0 y km 15, con material de préstamo de la cantera autorizada C-03. Se realizaron 18 ensayos de compactación, todos con valores superiores al 95% DPMS exigido. La cota de proyecto se cumple con variaciones inferiores a ±2 cm según nivelación diferencial. Se aprueba la partida.",
-      resultado: "Aprobado", creatorRole: "inspector_fiscal", creatorName: "Cristián Manríquez",
-      createdAt: "2026-05-20T11:00:00", status: "firmado", signedAt: "2026-05-20T11:08:00",
-      signature: { code: "MOP-2024-202-GH" }, refFolio: null, geo: null, photos: [], comments: [],
-    },
-    {
-      id: 33, folioNumber: 3,
-      category: "Recepción de Partida",
-      title: "Recepción de carpeta asfáltica km 0–12",
-      body: "Se verifica la colocación de carpeta asfáltica AC-10 en el tramo km 0–12. Testigos extraídos: 6 unidades. Espesor promedio: 6,1 cm (mín. exigido 6,0 cm). Porcentaje de vacíos promedio: 4,8% (rango aceptable 3–6%). Resistencia a la compresión diametral promedio: 1.220 kPa (mín. exigido 800 kPa). Partida aprobada sin observaciones.",
-      resultado: "Aprobado", creatorRole: "inspector_fiscal", creatorName: "Cristián Manríquez",
-      createdAt: "2026-07-30T09:45:00", status: "firmado", signedAt: "2026-07-30T09:52:00",
-      signature: { code: "MOP-2024-203-IJ" }, refFolio: null, geo: null, photos: [], comments: [],
-    },
+    base({
+      id: 3101, numero: 1, libro: "maestro", categoria: "Instrucción Inspector Fiscal",
+      titulo: "Observación a terminaciones de tabiquería en segundo nivel",
+      cuerpo: "Se instruye corregir el aplome de la tabiquería de volcanita del segundo nivel, eje D entre ejes 4 y 7, por presentar desviaciones superiores a la tolerancia de 3 mm por metro establecida en las especificaciones técnicas. La corrección deberá ejecutarse antes de la instalación del cielo falso.",
+      autorRol: "inspector_fiscal", autorNombre: IF_NOMBRE,
+      creadoEn: "2026-08-30T15:00:00", estado: "firmado", firmadoEn: "2026-08-30T15:09:00",
+      firma: { codigo: "MOP-2026-001-XY" },
+    }),
+    base({
+      id: 3201, numero: 1, libro: "comunicaciones", categoria: "Avance Diario",
+      titulo: "Montaje de estructura de techumbre, sector oriente",
+      cuerpo: "Se informa el término del montaje de cerchas metálicas del sector oriente del edificio, con verificación de torque en uniones apernadas y aplicación de pintura anticorrosiva de retoque en soldaduras de terreno. Avance físico acumulado de la partida: 72%.",
+      autorRol: "admin_contrato", autorNombre: AC_NOMBRE,
+      creadoEn: "2026-09-04T18:30:00", estado: "firmado", firmadoEn: "2026-09-04T18:41:00",
+      firma: { codigo: "MOP-2026-001-ZA" },
+    }),
+    base({
+      id: 3301, numero: 1, libro: "prevencion", categoria: "Seguridad y Medio Ambiente",
+      titulo: "Trabajo en altura: verificación de andamios y arnés",
+      cuerpo: "Se verifica la certificación de los andamios modulares del sector oriente, la instalación de rodapiés y barandas en todas las plataformas y el uso de arnés de seguridad con doble cola de vida en el personal que ejecuta montaje de techumbre.",
+      autorRol: "prevencionista", autorNombre: PR_NOMBRE,
+      creadoEn: "2026-09-04T08:45:00", estado: "firmado", firmadoEn: "2026-09-04T08:52:00",
+      firma: { codigo: "MOP-2026-001-BC" },
+    }),
   ],
   4: [
-    {
-      id: 41, folioNumber: 1,
-      category: "Instrucción",
-      title: "Instrucción de entrega de terreno y condicionantes iniciales",
-      body: "El Inspector Fiscal procede a la entrega formal de terreno del contrato MOP-ARQ-0056/2025, Edificio de Servicios MOP, Coyhaique. Condicionantes: (1) el acceso de maquinaria respetará la servidumbre de paso sur de 4,0 m; (2) las excavaciones se ejecutarán con entibación según estudio de mecánica; (3) se prohíbe maquinaria pesada los días sábado, domingo y festivos por ordenanza municipal.",
-      resultado: null, creatorRole: "inspector_fiscal", creatorName: "Cristián Manríquez",
-      createdAt: "2026-09-01T08:30:00", status: "firmado", signedAt: "2026-09-01T08:38:00",
-      signature: { code: "MOP-2025-301-KL" }, refFolio: null, geo: null, photos: [], comments: [],
-    },
-    {
-      id: 42, folioNumber: 2,
-      category: "Avance",
-      title: "Inicio de excavación de fundaciones sector A",
-      body: "El Administrador de Contrato informa el inicio de la excavación de fundaciones en el sector A del Edificio de Servicios MOP. La excavación se realiza con retroexcavadora CAT 320 con entibación metálica según diseño provisional aprobado. Profundidad de proyecto: -3,5 m del nivel de pavimento. Volumen estimado: 480 m³.",
-      resultado: null, creatorRole: "admin_contrato", creatorName: "Mauricio Jilabert",
-      createdAt: "2026-09-08T14:00:00", status: "borrador",
-      signedAt: null, signature: null, refFolio: null, geo: null, photos: [], comments: [],
-    },
+    base({
+      id: 4101, numero: 1, libro: "maestro", categoria: "Instrucción Inspector Fiscal",
+      titulo: "Programa de conservación rutinaria para período invernal",
+      cuerpo: "Se instruye a la empresa contratista mantener operativo el equipo de despeje de nieve durante todo el período invernal, con disponibilidad de 24 horas y reporte diario del estado de transitabilidad de la ruta entre Porvenir y Cerro Sombrero. Ante cierre de la ruta deberá informarse de inmediato a la Inspección Fiscal por el medio más expedito.",
+      autorRol: "inspector_fiscal", autorNombre: IF_NOMBRE,
+      creadoEn: "2026-06-02T11:00:00", estado: "firmado", firmadoEn: "2026-06-02T11:13:00",
+      firma: { codigo: "MOP-2026-001-DE" },
+    }),
+    base({
+      id: 4201, numero: 1, libro: "comunicaciones", categoria: "Avance Diario",
+      titulo: "Perfilado y reposición de material granular, km 28 al km 34",
+      cuerpo: "Se informa la ejecución del perfilado de la calzada y reposición de material granular estabilizado en el tramo indicado, con aporte de 620 m³ de material proveniente del pozo autorizado. Se ejecutó riego de compactación pese a las bajas temperaturas registradas en la jornada.",
+      autorRol: "admin_contrato", autorNombre: AC_NOMBRE,
+      creadoEn: "2026-08-14T17:00:00", estado: "firmado", firmadoEn: "2026-08-14T17:26:00",
+      firma: { codigo: "MOP-2026-001-FG" },
+    }),
   ],
 };
 
 /* ================================================================== */
-/*  SERVICIOS                                                          */
+/*  SELLADO E INTEGRIDAD                                               */
 /* ================================================================== */
-const netDelay = (ms = 400) => new Promise((r) => setTimeout(r, ms));
+
+/** Representación canónica del contenido de un folio. Sólo incluye lo que
+ *  queda sellado: modificar cualquiera de estos campos rompe la cadena.
+ *  La resolución del Inspector Fiscal NO forma parte del sello, porque es
+ *  un acto posterior y separado que se adosa al folio sin alterarlo. */
+function canonico(f) {
+  return JSON.stringify({
+    n: f.numero, lib: f.libro, cat: f.categoria,
+    tit: f.titulo, cue: f.cuerpo,
+    rol: f.autorRol, aut: f.autorNombre,
+    cre: f.creadoEn, fir: f.firmadoEn,
+    fot: (f.fotos || []).map((p) => p.nombre || ""),
+  });
+}
+
+/** SHA-256 vía Web Crypto. En contextos no seguros (http en red local,
+ *  típico al probar desde el celular) crypto.subtle no existe: se usa un
+ *  resumen no criptográfico para que la demostración siga funcionando. */
+async function digestHex(texto) {
+  try {
+    if (globalThis.crypto && globalThis.crypto.subtle) {
+      const datos = new TextEncoder().encode(texto);
+      const buf = await globalThis.crypto.subtle.digest("SHA-256", datos);
+      return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+    }
+  } catch (e) {
+    console.warn("crypto.subtle no disponible, se usa resumen alternativo", e);
+  }
+  return resumenAlternativo(texto);
+}
+
+function resumenAlternativo(texto) {
+  let a = 0x811c9dc5, b = 0x01000193, c = 0x85ebca6b, d = 0xc2b2ae35;
+  for (let i = 0; i < texto.length; i++) {
+    const ch = texto.charCodeAt(i);
+    a = Math.imul(a ^ ch, 16777619);
+    b = Math.imul(b ^ (ch + i), 2246822519);
+    c = Math.imul(c ^ (ch * 31), 3266489917);
+    d = Math.imul(d ^ (ch + 7), 668265263);
+  }
+  const h = (n) => (n >>> 0).toString(16).padStart(8, "0");
+  return (h(a) + h(b) + h(c) + h(d)).repeat(2);
+}
+
+function cadenaDe(folios, libro) {
+  return folios
+    .filter((f) => f.libro === libro && f.estado === "firmado")
+    .sort((x, y) => x.numero - y.numero);
+}
+
+/** Calcula la cadena de sellos de todos los libros de un contrato. */
+async function sellarCadenas(folios) {
+  const salida = folios.map((f) => ({ ...f }));
+  for (const clave of Object.keys(LIBROS)) {
+    let previo = "GENESIS";
+    for (const f of cadenaDe(salida, clave)) {
+      const hash = await digestHex(canonico(f) + "|" + previo);
+      f.firma = { ...(f.firma || {}), hash, hashAnterior: previo, metodo: "FEA simulada · PIN + biometría" };
+      previo = hash;
+    }
+  }
+  return salida;
+}
+
+/** Recorre la cadena de un libro y reporta el estado de cada folio. */
+async function verificarLibro(folios, libro) {
+  const resultado = [];
+  let previo = "GENESIS";
+  let rota = false;
+  for (const f of cadenaDe(folios, libro)) {
+    const esperado = await digestHex(canonico(f) + "|" + previo);
+    let estado;
+    if (rota) estado = "no_verificable";
+    else if (esperado === f.firma?.hash && previo === f.firma?.hashAnterior) estado = "ok";
+    else { estado = "alterado"; rota = true; }
+    resultado.push({ id: f.id, numero: f.numero, titulo: f.titulo, estado, esperado, almacenado: f.firma?.hash });
+    previo = f.firma?.hash || esperado;
+  }
+  return resultado;
+}
+
+function letrasAleatorias() {
+  const abc = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  return abc[Math.floor(Math.random() * abc.length)] + abc[Math.floor(Math.random() * abc.length)];
+}
+
+/* ================================================================== */
+/*  SERVICIOS (reemplazables 1:1 por llamadas a la API real)           */
+/* ================================================================== */
+const demora = (ms = 400) => new Promise((r) => setTimeout(r, ms));
 
 const authService = {
-  async login(email, password) {
-    await netDelay();
-    const account = MOCK_CREDENTIALS[email.trim().toLowerCase()];
-    if (!account || account.password !== password) throw new Error("Usuario o contraseña incorrectos.");
-    return { token: "mock.jwt." + btoa(email).slice(0, 12), role: account.role, user: ROLES[account.role] };
+  async login(usuario, clave) {
+    await demora();
+    const cuenta = CREDENCIALES[String(usuario).trim().toLowerCase()];
+    if (!cuenta || cuenta.clave !== clave) throw new Error("Usuario o contraseña incorrectos.");
+    return { token: "demo." + btoa(usuario).slice(0, 12), rol: cuenta.rol, usuario: ROLES[cuenta.rol] };
   },
 };
 
 const folioService = {
-  // Crea borrador (producción: POST /api/v1/folios/)
-  async create(p) { await netDelay(300); return { ...p, createdAt: new Date().toISOString() }; },
-
-  // Firma electrónica avanzada (producción: POST /api/v1/folios/:id/firmar/)
-  // Simula la consulta al proveedor de FEA y devuelve el folio firmado con código.
-  async sign(folio) {
-    await netDelay(800);
-    const code = "MOP-" + new Date().getFullYear() + "-" +
-      String(folio.folioNumber).padStart(3, "0") + "-" +
-      Math.random().toString(36).slice(2, 4).toUpperCase() +
-      Math.floor(10 + Math.random() * 89);
-    return { ...folio, status: "firmado", signedAt: new Date().toISOString(), signature: { code } };
+  async crear(payload) { await demora(300); return { ...payload, creadoEn: new Date().toISOString() }; },
+  async firmar(folio, hashPrevio) {
+    await demora(300);
+    const firmadoEn = new Date().toISOString();
+    const firmado = { ...folio, estado: "firmado", firmadoEn };
+    const hash = await digestHex(canonico(firmado) + "|" + hashPrevio);
+    firmado.firma = {
+      codigo: `MOP-${new Date().getFullYear()}-${String(folio.numero).padStart(3, "0")}-${letrasAleatorias()}`,
+      hash, hashAnterior: hashPrevio, metodo: "FEA simulada · PIN + biometría",
+    };
+    return firmado;
   },
-
-  // Aprueba o rechaza (producción: POST /api/v1/folios/:id/resolver/)
-  async resolve(id, resultado) { await netDelay(400); return { id, resultado }; },
+  async resolver(folioId, resolucion) { await demora(300); return { folioId, resolucion }; },
 };
 
 /* ================================================================== */
 /*  UTILIDADES                                                         */
 /* ================================================================== */
-function formatDateTime(iso) {
+function fechaHora(iso) {
   if (!iso) return "—";
   return new Date(iso).toLocaleString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
-function foliostr(n) { return String(n).padStart(3, "0"); }
+function nFolio(n) { return String(n).padStart(3, "0"); }
+function corto(hash, n = 16) { return hash ? hash.slice(0, n) + "…" : "—"; }
+
+const estiloEtiqueta = { fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 8 };
+const estiloCampo = { width: "100%", borderRadius: 12, padding: "13px 14px", marginBottom: 18, background: "rgba(0,0,0,0.04)", border: "1px solid var(--border-glass)", color: "var(--text-main)", outline: "none" };
+
+/* ================================================================== */
+/*  ANIMACIONES PROPIAS DE ESTA PANTALLA                               */
+/* ================================================================== */
+function EstilosLocales() {
+  return (
+    <style>{`
+      @keyframes lodPulso { 0%,100% { transform: scale(1); opacity: .85 } 50% { transform: scale(1.08); opacity: 1 } }
+      @keyframes lodAnillo { 0% { transform: scale(.9); opacity: .7 } 100% { transform: scale(1.5); opacity: 0 } }
+      @keyframes lodBarrido { 0% { top: 8% } 100% { top: 88% } }
+      .lod-pulso { animation: lodPulso 1.4s ease-in-out infinite; }
+      .lod-anillo { animation: lodAnillo 1.6s ease-out infinite; }
+      .lod-barrido { animation: lodBarrido 1.1s ease-in-out infinite alternate; }
+      .lod-paso { height: 4px; border-radius: 2px; flex: 1; transition: background .3s ease; }
+    `}</style>
+  );
+}
 
 /* ================================================================== */
 /*  CAPTURA DE FOTOS                                                   */
 /* ================================================================== */
-function PhotoCapture({ photos, onPhotosChange }) {
-  const fileRef = useRef(null);
-  function handleCapture(e) {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
-    const newPhotos = files.map((file) => ({ id: Date.now() + Math.random(), file, preview: URL.createObjectURL(file), name: file.name }));
-    onPhotosChange([...photos, ...newPhotos]);
+function CapturaFotos({ fotos, onCambio }) {
+  const refArchivo = useRef(null);
+  function capturar(e) {
+    const archivos = Array.from(e.target.files || []);
+    if (!archivos.length) return;
+    const nuevas = archivos.map((file) => ({ id: Date.now() + Math.random(), file, preview: URL.createObjectURL(file), nombre: file.name }));
+    onCambio([...fotos, ...nuevas]);
     e.target.value = "";
   }
-  function removePhoto(id) {
-    const photo = photos.find((p) => p.id === id);
-    if (photo?.preview) URL.revokeObjectURL(photo.preview);
-    onPhotosChange(photos.filter((p) => p.id !== id));
+  function quitar(id) {
+    const foto = fotos.find((p) => p.id === id);
+    if (foto?.preview) URL.revokeObjectURL(foto.preview);
+    onCambio(fotos.filter((p) => p.id !== id));
   }
+  const botón = { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 0", borderRadius: 12, border: "1px solid var(--border-glass)", background: "var(--bg-glass)", color: "var(--text-main)", fontWeight: 600, fontSize: 13 };
   return (
     <div>
-      <div style={{ display: "flex", gap: 8, marginBottom: photos.length > 0 ? 12 : 0 }}>
-        <button type="button" onClick={() => { fileRef.current.setAttribute("capture", "environment"); fileRef.current.click(); }}
-          className="btn-tap" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 0", borderRadius: 12, border: "1px solid var(--border-glass)", background: "var(--bg-glass)", color: "var(--text-main)", fontWeight: 600, fontSize: 13 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: fotos.length > 0 ? 12 : 0 }}>
+        <button type="button" className="btn-tap" style={botón}
+          onClick={() => { refArchivo.current.setAttribute("capture", "environment"); refArchivo.current.click(); }}>
           <Camera size={18} /> Cámara
         </button>
-        <button type="button" onClick={() => { fileRef.current.removeAttribute("capture"); fileRef.current.click(); }}
-          className="btn-tap" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 0", borderRadius: 12, border: "1px solid var(--border-glass)", background: "var(--bg-glass)", color: "var(--text-main)", fontWeight: 600, fontSize: 13 }}>
+        <button type="button" className="btn-tap" style={botón}
+          onClick={() => { refArchivo.current.removeAttribute("capture"); refArchivo.current.click(); }}>
           <Image size={18} /> Galería
         </button>
-        <input ref={fileRef} type="file" accept="image/*" multiple onChange={handleCapture} style={{ display: "none" }} />
+        <input ref={refArchivo} type="file" accept="image/*" multiple onChange={capturar} style={{ display: "none" }} />
       </div>
-      {photos.length > 0 && (
+      {fotos.length > 0 && (
         <div className="photo-grid">
-          {photos.map((p) => (
+          {fotos.map((p) => (
             <div key={p.id} style={{ position: "relative" }}>
-              <img src={p.preview} alt={p.name} />
-              <button onClick={() => removePhoto(p.id)} style={{ position: "absolute", top: 4, right: 4, width: 22, height: 22, borderRadius: "50%", background: "rgba(0,0,0,0.6)", color: "#fff", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><X size={12} /></button>
+              <img src={p.preview} alt={p.nombre} />
+              <button onClick={() => quitar(p.id)} style={{ position: "absolute", top: 4, right: 4, width: 22, height: 22, borderRadius: "50%", background: "rgba(0,0,0,0.6)", color: "#fff", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><X size={12} /></button>
             </div>
           ))}
         </div>
@@ -324,182 +485,191 @@ function PhotoCapture({ photos, onPhotosChange }) {
 }
 
 /* ================================================================== */
-/*  MODAL DE FIRMA ELECTRÓNICA AVANZADA                                */
-/*  Flujo: advertencia legal → PIN simulado → biometría → confirmación */
+/*  MODAL DE FIRMA ELECTRÓNICA AVANZADA (simulada)                     */
 /* ================================================================== */
-function SignatureModal({ folio, role, onCancel, onSigned }) {
-  const currentRole = ROLES[role];
-  // "warning" → "pin" → "bio" → "done"
-  const [step, setStep] = useState("warning");
+function ModalFirma({ folio, rol, onCerrar, onFirmar }) {
+  const [paso, setPaso] = useState(1);
+  const [acepta, setAcepta] = useState(false);
   const [pin, setPin] = useState("");
-  const [pinError, setPinError] = useState("");
-  const [signing, setSigning] = useState(false);
+  const [error, setError] = useState("");
+  const [bio, setBio] = useState("espera");
+  const [firmado, setFirmado] = useState(null);
+  const yaSellado = useRef(false);
 
-  function submitPin() {
-    if (pin.length !== 4 || !/^\d{4}$/.test(pin)) {
-      setPinError("Ingresa el PIN de 4 dígitos de tu certificado digital.");
-      return;
-    }
-    setPinError("");
-    setStep("bio");
-  }
+  useEffect(() => {
+    if (paso !== 3 || bio !== "leyendo") return;
+    const t = setTimeout(() => setBio("verificando"), 1900);
+    return () => clearTimeout(t);
+  }, [paso, bio]);
 
-  async function runBiometric() {
-    setSigning(true);
-    try {
-      // Punto de integración real: WebAuthn / SDK del proveedor de FEA
-      // (p.ej. navigator.credentials.get(...)). Aquí se simula la respuesta.
-      const signed = await folioService.sign(folio);
-      setStep("done");
-      setTimeout(() => onSigned(signed), 900);
-    } catch {
-      setSigning(false);
-      setStep("pin");
-      setPinError("No se pudo completar la firma. Reintenta.");
-    }
-  }
+  useEffect(() => {
+    if (bio !== "verificando" || yaSellado.current) return;
+    yaSellado.current = true;
+    let cancelado = false;
+    (async () => {
+      try {
+        const resultado = await onFirmar();
+        if (!cancelado) { setFirmado(resultado); setPaso(4); }
+      } catch (e) {
+        if (!cancelado) { setError("No fue posible completar la firma. Reintenta."); setBio("espera"); yaSellado.current = false; }
+      }
+    })();
+    return () => { cancelado = true; };
+  }, [bio, onFirmar]);
+
+  const puedeCerrar = paso === 1 || paso === 2 || paso === 4;
 
   return (
-    <div
-      className="fade-in"
-      style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "flex-end", justifyContent: "center", background: "rgba(0,0,0,0.72)" }}
-      onClick={step !== "done" ? onCancel : undefined}
-    >
-      <div
-        className="sheet-enter"
-        style={{ width: "100%", maxWidth: 480, borderRadius: "24px 24px 0 0", padding: 28, background: "var(--bg-canvas)" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Cabecera */}
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 22 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 14, background: "var(--color-info-bg)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <ShieldCheck size={22} style={{ color: "var(--color-info)" }} />
+    <div className="fade-in" style={{ position: "fixed", inset: 0, zIndex: 70, display: "flex", alignItems: "flex-end", justifyContent: "center", background: "rgba(0,0,0,0.72)" }}
+      onClick={() => puedeCerrar && onCerrar()}>
+      <div className="sheet-enter" style={{ width: "100%", maxWidth: 480, maxHeight: "94vh", overflowY: "auto", borderRadius: "24px 24px 0 0", padding: 24, background: "var(--bg-canvas)" }}
+        onClick={(e) => e.stopPropagation()}>
+
+        {/* Cabecera + progreso */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 34, height: 34, borderRadius: 10, background: "var(--accent-glow)", color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <FileSignature size={17} />
+            </div>
+            <div>
+              <p className="font-display" style={{ fontSize: 15, fontWeight: 700 }}>Firma Electrónica Avanzada</p>
+              <p style={{ fontSize: 11, color: "var(--text-muted)" }}>Folio N°{nFolio(folio.numero)} · {LIBROS[folio.libro].corto}</p>
+            </div>
           </div>
-          <div style={{ flex: 1 }}>
-            <p className="font-display" style={{ fontSize: 16, fontWeight: 700 }}>Firma Electrónica Avanzada</p>
-            <p style={{ fontSize: 11, color: "var(--text-muted)" }}>Folio N°{foliostr(folio.folioNumber)} · {folio.category}</p>
-          </div>
-          {step !== "done" && (
-            <button onClick={onCancel} style={{ padding: 6, background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}><X size={20} /></button>
+          {puedeCerrar && (
+            <button onClick={onCerrar} style={{ padding: 6, background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}><X size={20} /></button>
           )}
+        </div>
+        <div style={{ display: "flex", gap: 5, marginBottom: 22 }}>
+          {[1, 2, 3, 4].map((n) => (
+            <div key={n} className="lod-paso" style={{ background: n <= paso ? "var(--accent)" : "rgba(0,0,0,0.10)" }} />
+          ))}
         </div>
 
         {/* PASO 1 — Advertencia legal */}
-        {step === "warning" && (
-          <>
-            <div style={{ borderRadius: 14, padding: "14px 16px", marginBottom: 16, background: "var(--color-danger-bg)", border: "1px solid rgba(239,68,68,0.25)" }}>
-              <p style={{ fontSize: 13, fontWeight: 700, color: "var(--color-danger)", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
-                <TriangleAlert size={15} /> Advertencia legal
-              </p>
-              <p style={{ fontSize: 13, lineHeight: 1.7, color: "var(--text-main)" }}>
-                Al firmar, el folio queda <strong>bloqueado</strong>: no podrá editarse ni eliminarse. Los folios firmados son <strong>inmutables</strong> conforme al Reglamento de Contratos de Obra Pública (RCOP).
+        {paso === 1 && (
+          <div className="fade-in">
+            <p style={estiloEtiqueta}>Paso 1 de 4 · Advertencia legal</p>
+            <div style={{ borderRadius: 16, padding: 16, background: "var(--color-warning-bg)", border: "1px solid var(--border-glass)", marginBottom: 16 }}>
+              <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+                <TriangleAlert size={18} style={{ color: "var(--color-warning)", flexShrink: 0, marginTop: 2 }} />
+                <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-main)" }}>Esta acción es irreversible</p>
+              </div>
+              <p style={{ fontSize: 12.5, lineHeight: 1.75, color: "var(--text-muted)" }}>
+                Al firmar, el presente folio quedará incorporado de forma definitiva al {LIBROS[folio.libro].nombre} del contrato. No podrá ser editado ni eliminado por ningún usuario, incluido quien lo suscribe. Cualquier corrección posterior deberá efectuarse mediante un nuevo folio que haga referencia expresa a éste.
               </p>
             </div>
-            <div style={{ borderRadius: 12, padding: "12px 14px", marginBottom: 20, background: "var(--bg-glass)", border: "1px solid var(--border-glass)", fontSize: 12 }}>
-              <p style={{ color: "var(--text-muted)", marginBottom: 2 }}>Firmante</p>
-              <p style={{ fontWeight: 700, marginBottom: 8 }}>{currentRole.name}</p>
-              <p style={{ color: "var(--text-muted)", marginBottom: 2 }}>Rol</p>
-              <p style={{ fontWeight: 600 }}>{currentRole.label}</p>
+            <div style={{ borderRadius: 16, padding: 16, background: "rgba(0,0,0,0.035)", border: "1px solid var(--border-glass)", marginBottom: 18 }}>
+              <p style={{ fontSize: 11.5, lineHeight: 1.75, color: "var(--text-muted)" }}>
+                La firma se efectúa conforme a la <strong style={{ color: "var(--text-main)" }}>Ley N° 19.799</strong>, sobre documentos electrónicos, firma electrónica y servicios de certificación de dicha firma. El suscriptor declara que los antecedentes consignados corresponden a hechos verificados en terreno y asume la responsabilidad que de ello se deriva.
+              </p>
+              <p className="font-mono" style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 10, opacity: 0.75 }}>
+                Suscriptor: {rol.nombre} · {rol.label}
+              </p>
             </div>
-            <button
-              onClick={() => setStep("pin")}
-              className="btn-tap btn-accent"
-              style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px 0", borderRadius: 14, border: "none", fontWeight: 700, fontSize: 15 }}
-            >
-              <FileSignature size={18} /> Continuar con la firma
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", marginBottom: 18 }}>
+              <input type="checkbox" checked={acepta} onChange={(e) => setAcepta(e.target.checked)} style={{ width: 18, height: 18, marginTop: 1, flexShrink: 0, accentColor: "var(--accent)" }} />
+              <span style={{ fontSize: 13, lineHeight: 1.6, color: "var(--text-main)" }}>He leído la advertencia y acepto firmar este folio con validez legal.</span>
+            </label>
+            <button onClick={() => setPaso(2)} disabled={!acepta} className="btn-tap btn-accent"
+              style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 15, fontWeight: 600, borderRadius: 14, padding: "14px 0", border: "none", opacity: acepta ? 1 : 0.45 }}>
+              Continuar <ChevronRight size={18} />
             </button>
-            <button
-              onClick={onCancel}
-              style={{ width: "100%", marginTop: 10, padding: "12px 0", borderRadius: 14, border: "none", background: "none", color: "var(--text-muted)", fontWeight: 600, fontSize: 14, cursor: "pointer" }}
-            >
-              Cancelar
-            </button>
-          </>
+          </div>
         )}
 
-        {/* PASO 2 — PIN del certificado */}
-        {step === "pin" && (
-          <>
-            <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 6 }}>
-              <KeyRound size={14} /> PIN del certificado digital
-            </label>
+        {/* PASO 2 — PIN */}
+        {paso === 2 && (
+          <div className="fade-in">
+            <p style={estiloEtiqueta}>Paso 2 de 4 · Clave de firma</p>
+            <div style={{ textAlign: "center", padding: "10px 0 18px" }}>
+              <div style={{ width: 56, height: 56, borderRadius: 18, background: "var(--accent-glow)", color: "var(--accent)", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+                <KeyRound size={26} />
+              </div>
+              <p style={{ fontSize: 13.5, color: "var(--text-muted)", lineHeight: 1.6, maxWidth: 320, margin: "0 auto" }}>
+                Ingresa tu clave personal de firma. Es distinta de la contraseña de acceso y sólo tú la conoces.
+              </p>
+            </div>
             <input
               value={pin}
-              onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setPinError(""); }}
-              type="password"
-              inputMode="numeric"
-              autoFocus
-              placeholder="••••"
-              style={{ ...inputStyle, textAlign: "center", letterSpacing: "0.5em", fontSize: 26, fontWeight: 700, marginBottom: pinError ? 6 : 4 }}
+              onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }}
+              type="password" inputMode="numeric" autoComplete="off" placeholder="••••"
+              onKeyDown={(e) => { if (e.key === "Enter" && pin.length >= 4) { setPaso(3); setBio("leyendo"); } }}
+              style={{ ...estiloCampo, textAlign: "center", fontSize: 26, letterSpacing: "0.5em", padding: "16px 14px", marginBottom: 10 }}
             />
-            {pinError && (
-              <p style={{ fontSize: 12, color: "var(--color-danger)", marginBottom: 12 }}>{pinError}</p>
-            )}
-            <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 20 }}>
-              Para la demo, cualquier combinación de 4 dígitos es válida.
+            <p className="font-mono" style={{ fontSize: 10.5, color: "var(--text-muted)", textAlign: "center", marginBottom: 14, opacity: 0.8 }}>
+              Demostración: cualquier clave de 4 a 6 dígitos
             </p>
-            <button
-              onClick={submitPin}
-              className="btn-tap btn-accent"
-              style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px 0", borderRadius: 14, border: "none", fontWeight: 700, fontSize: 15 }}
-            >
-              Continuar
-            </button>
-          </>
+            {error && (
+              <div className="fade-in" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, borderRadius: 14, padding: "12px 14px", marginBottom: 14, background: "var(--color-danger-bg)", color: "var(--color-danger)" }}>
+                <TriangleAlert size={16} style={{ flexShrink: 0 }} /> {error}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setPaso(1)} className="btn-tap" style={{ flex: 1, padding: "13px 0", borderRadius: 12, border: "1px solid var(--border-glass)", background: "none", color: "var(--text-muted)", fontWeight: 600, fontSize: 14 }}>Atrás</button>
+              <button onClick={() => { if (pin.length < 4) { setError("La clave debe tener al menos 4 dígitos."); return; } setPaso(3); setBio("leyendo"); }}
+                className="btn-tap btn-accent" style={{ flex: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px 0", borderRadius: 12, border: "none", fontWeight: 600, fontSize: 14 }}>
+                Validar clave <ChevronRight size={17} />
+              </button>
+            </div>
+          </div>
         )}
 
         {/* PASO 3 — Biometría */}
-        {step === "bio" && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", paddingTop: 8, paddingBottom: 12 }}>
-            <button
-              onClick={runBiometric}
-              disabled={signing}
-              className="btn-tap"
-              aria-label="Validar con biometría"
-              style={{
-                width: 120, height: 120, borderRadius: "50%", border: "none",
-                display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20,
-                cursor: signing ? "default" : "pointer",
-                background: "var(--color-info-bg)",
-                boxShadow: signing ? "none" : "0 0 0 10px rgba(99,102,241,0.1), 0 0 0 20px rgba(99,102,241,0.05)",
-                transition: "box-shadow 0.4s ease",
-              }}
-            >
-              {signing
-                ? <Loader2 size={52} className="spin" style={{ color: "var(--color-info)" }} />
-                : <Fingerprint size={60} style={{ color: "var(--color-info)" }} />
-              }
-            </button>
+        {paso === 3 && (
+          <div className="fade-in" style={{ textAlign: "center", padding: "6px 0 10px" }}>
+            <p style={{ ...estiloEtiqueta, textAlign: "left" }}>Paso 3 de 4 · Verificación de identidad</p>
+            <div style={{ position: "relative", width: 150, height: 150, margin: "18px auto 22px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span className="lod-anillo" style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "2px solid var(--accent)" }} />
+              <span className="lod-anillo" style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "2px solid var(--accent)", animationDelay: "0.5s" }} />
+              <div style={{ position: "relative", width: 112, height: 112, borderRadius: "50%", background: "var(--accent-glow)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                <Fingerprint size={62} className={bio === "leyendo" ? "lod-pulso" : ""} style={{ color: "var(--accent)" }} />
+                {bio === "leyendo" && (
+                  <span className="lod-barrido" style={{ position: "absolute", left: "10%", right: "10%", height: 2, background: "var(--accent)", boxShadow: "0 0 10px var(--accent)", borderRadius: 2 }} />
+                )}
+              </div>
+            </div>
             <p className="font-display" style={{ fontSize: 17, fontWeight: 700, marginBottom: 8 }}>
-              {signing ? "Validando identidad…" : "Confirma con tu huella"}
+              {bio === "verificando" ? "Validando identidad…" : "Apoya el dedo en el sensor"}
             </p>
-            <p style={{ fontSize: 12, color: "var(--text-muted)", maxWidth: 260, lineHeight: 1.7, marginBottom: signing ? 0 : 20 }}>
-              {signing
-                ? "Consultando al proveedor de firma electrónica avanzada…"
-                : "Apoya el dedo en el sensor o usa Face ID para autorizar la firma con validez legal."
-              }
+            <p style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.65, maxWidth: 300, margin: "0 auto 20px" }}>
+              {bio === "verificando"
+                ? "Consultando al proveedor acreditado de servicios de certificación."
+                : "Usa la huella digital o el reconocimiento facial del dispositivo para autorizar la firma."}
             </p>
-            {!signing && (
-              <button
-                onClick={() => setStep("pin")}
-                style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}
-              >
-                <ChevronLeft size={15} /> Volver al PIN
+            {bio === "verificando" && <Loader2 size={22} className="spin" style={{ color: "var(--accent)" }} />}
+            {bio === "leyendo" && (
+              <button onClick={() => { setPaso(2); setBio("espera"); }} className="btn-tap"
+                style={{ padding: "11px 26px", borderRadius: 12, border: "1px solid var(--border-glass)", background: "none", color: "var(--text-muted)", fontWeight: 600, fontSize: 13 }}>
+                Cancelar
               </button>
             )}
           </div>
         )}
 
         {/* PASO 4 — Confirmación */}
-        {step === "done" && (
-          <div className="fade-in" style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", paddingTop: 8, paddingBottom: 20 }}>
-            <div style={{ width: 90, height: 90, borderRadius: "50%", background: "var(--color-success-bg)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
-              <CheckCheck size={48} style={{ color: "var(--color-success)" }} />
+        {paso === 4 && firmado && (
+          <div className="fade-in">
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <div style={{ width: 62, height: 62, borderRadius: "50%", background: "var(--color-success-bg)", color: "var(--color-success)", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+                <ShieldCheck size={30} />
+              </div>
+              <p className="font-display" style={{ fontSize: 19, fontWeight: 700, marginBottom: 6 }}>Folio firmado</p>
+              <p style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6, maxWidth: 320, margin: "0 auto" }}>
+                El folio quedó incorporado al libro y sellado. Desde este momento no admite modificaciones.
+              </p>
             </div>
-            <p className="font-display" style={{ fontSize: 19, fontWeight: 700, marginBottom: 8 }}>¡Folio firmado!</p>
-            <p style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.7 }}>
-              El registro fue incorporado a la bitácora de forma inmutable.
-            </p>
+            <div className="glass-panel" style={{ borderRadius: 16, padding: 16, marginBottom: 18 }}>
+              <FilaDato etiqueta="Código de firma" valor={firmado.firma.codigo} mono destacado />
+              <FilaDato etiqueta="Fecha y hora" valor={fechaHora(firmado.firmadoEn)} />
+              <FilaDato etiqueta="Método" valor={firmado.firma.metodo} />
+              <FilaDato etiqueta="Sello SHA-256" valor={corto(firmado.firma.hash, 28)} mono />
+              <FilaDato etiqueta="Encadenado a" valor={firmado.firma.hashAnterior === "GENESIS" ? "Primer folio del libro" : corto(firmado.firma.hashAnterior, 20)} mono ultimo />
+            </div>
+            <button onClick={onCerrar} className="btn-tap btn-accent"
+              style={{ width: "100%", fontSize: 15, fontWeight: 600, borderRadius: 14, padding: "14px 0", border: "none" }}>
+              Cerrar
+            </button>
           </div>
         )}
       </div>
@@ -507,348 +677,533 @@ function SignatureModal({ folio, role, onCancel, onSigned }) {
   );
 }
 
-/* ================================================================== */
-/*  CREAR NUEVO FOLIO                                                  */
-/* ================================================================== */
-function NewFolioSheet({ role, nextFolioNumber, onClose, onSave }) {
-  const currentRole = ROLES[role];
-  const [category, setCategory] = useState(currentRole.categories[0] || "Avance");
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [photos, setPhotos] = useState([]);
-  const [saving, setSaving] = useState(false);
+function FilaDato({ etiqueta, valor, mono, destacado, ultimo }) {
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, paddingBottom: ultimo ? 0 : 9, marginBottom: ultimo ? 0 : 9, borderBottom: ultimo ? "none" : "1px solid var(--border-glass)" }}>
+      <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", flexShrink: 0 }}>{etiqueta}</span>
+      <span className={mono ? "font-mono" : ""} style={{ fontSize: mono ? 11.5 : 12.5, fontWeight: destacado ? 700 : 500, color: destacado ? "var(--accent)" : "var(--text-main)", textAlign: "right", wordBreak: "break-all" }}>{valor}</span>
+    </div>
+  );
+}
 
-  async function handleSave() {
-    if (!title.trim() || !body.trim()) return;
-    setSaving(true);
-    const folio = {
-      id: Date.now(), folioNumber: nextFolioNumber, category,
-      title: title.trim(), body: body.trim(), resultado: null,
-      creatorRole: role, creatorName: currentRole.name,
-      createdAt: new Date().toISOString(), status: "borrador",
-      signedAt: null, signature: null, refFolio: null, geo: null,
-      photos: photos.map((p) => ({ id: p.id, name: p.name, preview: p.preview })), comments: [],
-    };
-    const created = await folioService.create(folio);
-    onSave({ ...folio, createdAt: created.createdAt });
-    setSaving(false);
+/* ================================================================== */
+/*  MODAL DE RECHAZO CON OBSERVACIONES                                 */
+/* ================================================================== */
+function ModalRechazo({ folio, onCerrar, onConfirmar }) {
+  const [texto, setTexto] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  return (
+    <div className="fade-in" style={{ position: "fixed", inset: 0, zIndex: 70, display: "flex", alignItems: "flex-end", justifyContent: "center", background: "rgba(0,0,0,0.7)" }} onClick={onCerrar}>
+      <div className="sheet-enter" style={{ width: "100%", maxWidth: 480, maxHeight: "92vh", overflowY: "auto", borderRadius: "24px 24px 0 0", padding: 24, background: "var(--bg-canvas)" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+          <h2 className="font-display" style={{ fontSize: 17, fontWeight: 700 }}>Rechazar con observaciones</h2>
+          <button onClick={onCerrar} style={{ padding: 8, background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}><X size={20} /></button>
+        </div>
+        <p style={{ fontSize: 12.5, color: "var(--text-muted)", lineHeight: 1.6, marginBottom: 18 }}>
+          Folio N°{nFolio(folio.numero)} · {folio.titulo}
+        </p>
+        <label style={estiloEtiqueta}>Observación técnica</label>
+        <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={6}
+          placeholder="Fundamente el rechazo indicando la partida observada, el incumplimiento detectado y la corrección exigida…"
+          style={{ ...estiloCampo, resize: "vertical", fontFamily: "inherit", lineHeight: 1.6 }} />
+        <div style={{ borderRadius: 12, padding: 13, background: "rgba(0,0,0,0.035)", border: "1px solid var(--border-glass)", marginBottom: 18 }}>
+          <p style={{ fontSize: 11.5, lineHeight: 1.7, color: "var(--text-muted)" }}>
+            La observación quedará adosada al folio con su fecha, hora y el nombre de quien la suscribe. El contenido original del folio no se modifica: el sello permanece intacto.
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={onCerrar} className="btn-tap" style={{ flex: 1, padding: "13px 0", borderRadius: 12, border: "1px solid var(--border-glass)", background: "none", color: "var(--text-muted)", fontWeight: 600, fontSize: 14 }}>Cancelar</button>
+          <button
+            onClick={async () => { if (!texto.trim()) return; setGuardando(true); await onConfirmar(texto.trim()); setGuardando(false); }}
+            disabled={!texto.trim() || guardando} className="btn-tap"
+            style={{ flex: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px 0", borderRadius: 12, border: "none", background: "var(--color-danger)", color: "#fff", fontWeight: 600, fontSize: 14, opacity: !texto.trim() || guardando ? 0.5 : 1 }}>
+            {guardando ? <Loader2 size={17} className="spin" /> : <CircleX size={17} />} Registrar rechazo
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  MODAL DE VERIFICACIÓN DE INTEGRIDAD                                */
+/* ================================================================== */
+function ModalIntegridad({ libro, folios, onCerrar, onAdulterar }) {
+  const [resultado, setResultado] = useState(null);
+  const [recargar, setRecargar] = useState(0);
+
+  useEffect(() => {
+    let cancelado = false;
+    setResultado(null);
+    (async () => {
+      const r = await verificarLibro(folios, libro);
+      if (!cancelado) setResultado(r);
+    })();
+    return () => { cancelado = true; };
+  }, [folios, libro, recargar]);
+
+  const conforme = resultado && resultado.every((r) => r.estado === "ok");
+  const primeraFalla = resultado && resultado.find((r) => r.estado === "alterado");
+
+  return (
+    <div className="fade-in" style={{ position: "fixed", inset: 0, zIndex: 70, display: "flex", alignItems: "flex-end", justifyContent: "center", background: "rgba(0,0,0,0.7)" }} onClick={onCerrar}>
+      <div className="sheet-enter" style={{ width: "100%", maxWidth: 480, maxHeight: "92vh", overflowY: "auto", borderRadius: "24px 24px 0 0", padding: 24, background: "var(--bg-canvas)" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+          <h2 className="font-display" style={{ fontSize: 17, fontWeight: 700 }}>Verificación de integridad</h2>
+          <button onClick={onCerrar} style={{ padding: 8, background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}><X size={20} /></button>
+        </div>
+
+        {!resultado && (
+          <div style={{ textAlign: "center", padding: "50px 0", color: "var(--text-muted)" }}>
+            <Loader2 size={26} className="spin" style={{ color: "var(--accent)", marginBottom: 12 }} />
+            <p style={{ fontSize: 12.5 }}>Recalculando la cadena de sellos…</p>
+          </div>
+        )}
+
+        {resultado && (
+          <>
+            <div style={{ borderRadius: 16, padding: 16, marginBottom: 16, background: conforme ? "var(--color-success-bg)" : "var(--color-danger-bg)", border: "1px solid var(--border-glass)" }}>
+              <div style={{ display: "flex", gap: 11 }}>
+                {conforme
+                  ? <ShieldCheck size={22} style={{ color: "var(--color-success)", flexShrink: 0 }} />
+                  : <ShieldAlert size={22} style={{ color: "var(--color-danger)", flexShrink: 0 }} />}
+                <div>
+                  <p className="font-display" style={{ fontSize: 14.5, fontWeight: 700, color: conforme ? "var(--color-success)" : "var(--color-danger)", marginBottom: 4 }}>
+                    {conforme ? "Libro íntegro" : "Se detectó una alteración"}
+                  </p>
+                  <p style={{ fontSize: 12, lineHeight: 1.65, color: "var(--text-muted)" }}>
+                    {conforme
+                      ? `Se recalcularon los ${resultado.length} folios firmados de ${LIBROS[libro].nombre} y todos los sellos coinciden con su contenido. El libro no ha sido alterado.`
+                      : `La cadena se rompe en el folio N°${nFolio(primeraFalla?.numero)}. Su contenido no corresponde al sello registrado al momento de la firma, por lo que los folios posteriores no pueden darse por verificados.`}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {resultado.length === 0 && (
+              <p style={{ fontSize: 13, color: "var(--text-muted)", textAlign: "center", padding: "24px 0" }}>
+                Este libro aún no tiene folios firmados.
+              </p>
+            )}
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
+              {resultado.map((r) => {
+                const cfg = r.estado === "ok"
+                  ? { color: "var(--color-success)", bg: "var(--color-success-bg)", Icon: CircleCheck, texto: "Sello conforme" }
+                  : r.estado === "alterado"
+                    ? { color: "var(--color-danger)", bg: "var(--color-danger-bg)", Icon: CircleX, texto: "Contenido alterado" }
+                    : { color: "var(--color-warning)", bg: "var(--color-warning-bg)", Icon: TriangleAlert, texto: "No verificable" };
+                return (
+                  <div key={r.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: 12, borderRadius: 12, background: cfg.bg, border: "1px solid var(--border-glass)" }}>
+                    <cfg.Icon size={16} style={{ color: cfg.color, flexShrink: 0, marginTop: 1 }} />
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <p style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.45 }}>N°{nFolio(r.numero)} · {r.titulo}</p>
+                      <p style={{ fontSize: 10.5, fontWeight: 600, color: cfg.color, marginTop: 3 }}>{cfg.texto}</p>
+                      <p className="font-mono" style={{ fontSize: 9.5, color: "var(--text-muted)", marginTop: 4, wordBreak: "break-all", opacity: 0.8 }}>{corto(r.almacenado, 32)}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {resultado.length > 0 && (
+              <div style={{ borderTop: "1px solid var(--border-glass)", paddingTop: 14 }}>
+                <p style={{ fontSize: 10.5, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Herramienta de demostración</p>
+                <p style={{ fontSize: 11.5, color: "var(--text-muted)", lineHeight: 1.65, marginBottom: 10 }}>
+                  Simula la modificación de un folio ya firmado directamente en la base de datos, sin pasar por la aplicación. Sirve para comprobar que la alteración queda en evidencia.
+                </p>
+                <button
+                  onClick={() => { onAdulterar(resultado[0].id); setRecargar((n) => n + 1); }}
+                  className="btn-tap"
+                  style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px 0", borderRadius: 12, border: "1px dashed var(--color-danger)", background: "none", color: "var(--color-danger)", fontWeight: 600, fontSize: 12.5 }}>
+                  <ShieldAlert size={16} /> Simular adulteración del folio N°{nFolio(resultado[0].numero)}
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  NUEVO FOLIO                                                        */
+/* ================================================================== */
+function HojaNuevoFolio({ rol, libro, numero, onCerrar, onGuardar }) {
+  const disponibles = rol.categorias;
+  const [categoria, setCategoria] = useState(disponibles[0]);
+  const [titulo, setTitulo] = useState("");
+  const [cuerpo, setCuerpo] = useState("");
+  const [fotos, setFotos] = useState([]);
+  const [guardando, setGuardando] = useState(false);
+
+  async function guardar() {
+    if (!titulo.trim() || !cuerpo.trim()) return;
+    setGuardando(true);
+    const folio = base({
+      id: Date.now(), numero, libro, categoria,
+      titulo: titulo.trim(), cuerpo: cuerpo.trim(),
+      autorRol: rol.clave, autorNombre: rol.nombre,
+      creadoEn: new Date().toISOString(), estado: "borrador",
+      fotos: fotos.map((p) => ({ id: p.id, nombre: p.nombre, preview: p.preview })),
+    });
+    const creado = await folioService.crear(folio);
+    onGuardar({ ...folio, creadoEn: creado.creadoEn });
+    setGuardando(false);
   }
 
   return (
-    <div className="fade-in" style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "flex-end", justifyContent: "center", background: "rgba(0,0,0,0.65)" }} onClick={onClose}>
+    <div className="fade-in" style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "flex-end", justifyContent: "center", background: "rgba(0,0,0,0.65)" }} onClick={onCerrar}>
       <div className="sheet-enter" style={{ width: "100%", maxWidth: 480, maxHeight: "92vh", overflowY: "auto", borderRadius: "24px 24px 0 0", padding: 24, background: "var(--bg-canvas)" }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <h2 className="font-display" style={{ fontSize: 18, fontWeight: 700 }}>Nuevo Folio N°{foliostr(nextFolioNumber)}</h2>
-          <button onClick={onClose} style={{ padding: 8, background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}><X size={22} /></button>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+          <h2 className="font-display" style={{ fontSize: 18, fontWeight: 700 }}>Nuevo folio N°{nFolio(numero)}</h2>
+          <button onClick={onCerrar} style={{ padding: 8, background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}><X size={22} /></button>
         </div>
-        <label style={labelStyle}>Categoría</label>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 20 }}>{LIBROS[libro].nombre}</p>
+
+        <label style={estiloEtiqueta}>Tipo de folio</label>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 18 }}>
-          {currentRole.categories.map((c) => {
-            const active = category === c; const cfg = CATEGORY_CONFIG[c]; return (
-              <button key={c} onClick={() => setCategory(c)} type="button"
-                style={{ fontSize: 12, fontWeight: 600, padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer", background: active ? cfg.bg : "rgba(0,0,0,0.04)", color: active ? cfg.color : "var(--text-muted)" }}>
+          {disponibles.map((c) => {
+            const activo = categoria === c;
+            const cfg = CATEGORIAS[c];
+            return (
+              <button key={c} type="button" onClick={() => setCategoria(c)}
+                style={{ fontSize: 12, fontWeight: 600, padding: "7px 13px", borderRadius: 8, border: "none", cursor: "pointer", background: activo ? cfg.bg : "rgba(0,0,0,0.04)", color: activo ? cfg.color : "var(--text-muted)" }}>
                 {c}
               </button>
             );
           })}
         </div>
-        <label style={labelStyle}>Título</label>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Título del folio…" style={inputStyle} />
-        <label style={labelStyle}>Descripción técnica</label>
-        <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Describe la partida, instrucción o incidente…" rows={5} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
-        <label style={labelStyle}>Evidencia fotográfica</label>
-        <PhotoCapture photos={photos} onPhotosChange={setPhotos} />
-        <button onClick={handleSave} disabled={saving || !title.trim() || !body.trim()} className="btn-tap btn-accent"
-          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 15, fontWeight: 600, borderRadius: 14, padding: "14px 0", border: "none", marginTop: 20, opacity: (saving || !title.trim() || !body.trim()) ? 0.5 : 1 }}>
-          {saving ? <Loader2 size={18} className="spin" /> : <Plus size={18} />}
-          {saving ? "Guardando…" : "Crear Folio como Borrador"}
+
+        <label style={estiloEtiqueta}>Título</label>
+        <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ej: Recepción de subbase granular dm 4.200 – dm 4.850" style={estiloCampo} />
+
+        <label style={estiloEtiqueta}>Descripción técnica</label>
+        <textarea value={cuerpo} onChange={(e) => setCuerpo(e.target.value)} rows={5}
+          placeholder="Indique partida, ubicación (dm o eje), ensayos o verificaciones realizadas y la norma o especificación aplicable…"
+          style={{ ...estiloCampo, resize: "vertical", fontFamily: "inherit", lineHeight: 1.6 }} />
+
+        <label style={estiloEtiqueta}>Evidencia fotográfica</label>
+        <CapturaFotos fotos={fotos} onCambio={setFotos} />
+
+        <div style={{ borderRadius: 12, padding: 12, background: "rgba(0,0,0,0.035)", border: "1px solid var(--border-glass)", margin: "18px 0" }}>
+          <p style={{ fontSize: 11.5, lineHeight: 1.65, color: "var(--text-muted)" }}>
+            El folio se creará como borrador y podrá editarse. Sólo al firmarlo quedará incorporado al libro de forma definitiva.
+          </p>
+        </div>
+
+        <button onClick={guardar} disabled={guardando || !titulo.trim() || !cuerpo.trim()} className="btn-tap btn-accent"
+          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 15, fontWeight: 600, borderRadius: 14, padding: "14px 0", border: "none", opacity: (guardando || !titulo.trim() || !cuerpo.trim()) ? 0.5 : 1 }}>
+          {guardando ? <Loader2 size={18} className="spin" /> : <Plus size={18} />}
+          {guardando ? "Guardando…" : "Crear folio como borrador"}
         </button>
       </div>
     </div>
   );
 }
 
-const labelStyle = { fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 8 };
-const inputStyle = { width: "100%", borderRadius: 12, padding: "13px 14px", marginBottom: 18, background: "rgba(0,0,0,0.04)", border: "1px solid var(--border-glass)", color: "var(--text-main)", outline: "none" };
+/* ================================================================== */
+/*  BANNER DE INMUTABILIDAD                                            */
+/* ================================================================== */
+function BannerInmutabilidad({ folio }) {
+  const f = folio.firma || {};
+  return (
+    <div style={{ borderRadius: 18, padding: 17, marginBottom: 18, background: "var(--color-success-bg)", border: "1px solid var(--border-glass)" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 11, marginBottom: 13 }}>
+        <ShieldCheck size={21} style={{ color: "var(--color-success)", flexShrink: 0, marginTop: 1 }} />
+        <div>
+          <p className="font-display" style={{ fontSize: 14, fontWeight: 700, color: "var(--color-success)", marginBottom: 4 }}>
+            Documento firmado electrónicamente
+          </p>
+          <p style={{ fontSize: 11.5, lineHeight: 1.7, color: "var(--text-muted)" }}>
+            Folio incorporado de forma definitiva al libro y sellado criptográficamente. No admite edición ni eliminación. Firmado conforme a la Ley N° 19.799 sobre documentos electrónicos y firma electrónica.
+          </p>
+        </div>
+      </div>
+      <div style={{ background: "rgba(0,0,0,0.04)", borderRadius: 12, padding: 13 }}>
+        <FilaDato etiqueta="Código de firma" valor={f.codigo || "—"} mono destacado />
+        <FilaDato etiqueta="Suscrito por" valor={`${folio.autorNombre} · ${ROLES[folio.autorRol]?.label || ""}`} />
+        <FilaDato etiqueta="Fecha y hora" valor={fechaHora(folio.firmadoEn)} />
+        <FilaDato etiqueta="Sello SHA-256" valor={corto(f.hash, 30)} mono />
+        <FilaDato etiqueta="Encadenado a" valor={f.hashAnterior === "GENESIS" ? "Primer folio del libro" : corto(f.hashAnterior, 22)} mono ultimo />
+      </div>
+    </div>
+  );
+}
 
 /* ================================================================== */
 /*  DETALLE DE FOLIO                                                   */
-/*  · Edición si es borrador propio                                    */
-/*  · Botón "Firmar" si es borrador propio (abre SignatureModal)       */
-/*  · Botones Aprobar/Rechazar para el Inspector Fiscal                */
-/*  · Banner de inmutabilidad si está firmado                          */
 /* ================================================================== */
-function FolioDetail({ folio, role, onClose, onUpdate }) {
-  const currentRole = ROLES[role];
-  const isDraft = folio.status === "borrador";
-  const cfg = CATEGORY_CONFIG[folio.category] || CATEGORY_CONFIG["Instrucción"];
-  const CatIcon = cfg.Icon;
+function DetalleFolio({ folio, rol, onCerrar, onActualizar, onFirmar, onRechazar, onAprobar }) {
+  const esBorrador = folio.estado === "borrador";
+  const cfg = CATEGORIAS[folio.categoria] || CATEGORIAS["Instrucción Inspector Fiscal"];
+  const IconoCat = cfg.Icon;
 
-  const [editing, setEditing] = useState(false);
-  const [title, setTitle] = useState(folio.title);
-  const [body, setBody] = useState(folio.body);
-  const [photos, setPhotos] = useState(folio.photos || []);
-  const [saving, setSaving] = useState(false);
-  const [showSignModal, setShowSignModal] = useState(false);
-  const [resolving, setResolving] = useState(false);
+  const [editando, setEditando] = useState(false);
+  const [titulo, setTitulo] = useState(folio.titulo);
+  const [cuerpo, setCuerpo] = useState(folio.cuerpo);
+  const [fotos, setFotos] = useState(folio.fotos || []);
+  const [guardando, setGuardando] = useState(false);
 
-  // El folio fue creado por el usuario actual → puede editar y firmar
-  const isOwner = folio.creatorRole === role;
+  const esAutor = folio.autorRol === rol.clave;
+  const puedeResolver =
+    rol.puedeResolver &&
+    folio.estado === "firmado" &&
+    !folio.resolucion &&
+    folio.autorRol !== rol.clave &&
+    CATEGORIAS_RESOLUBLES.includes(folio.categoria);
 
-  // El Inspector Fiscal puede Aprobar/Rechazar si:
-  // - tiene canResolve
-  // - el folio está firmado
-  // - es Incidente o Recepción de Partida sin resultado aún
-  // - NO fue creado por él mismo
-  const canResolve =
-    currentRole.canResolve &&
-    !isDraft &&
-    (folio.category === "Incidente" || folio.category === "Recepción de Partida") &&
-    folio.resultado === null &&
-    folio.creatorRole !== role;
-
-  async function handleSave() {
-    setSaving(true);
-    await new Promise((r) => setTimeout(r, 400));
-    onUpdate({ ...folio, title: title.trim(), body: body.trim(), photos });
-    setSaving(false);
-    setEditing(false);
-  }
-
-  function handleSigned(signedFolio) {
-    setShowSignModal(false);
-    onUpdate(signedFolio);
-  }
-
-  async function handleResolve(resultado) {
-    setResolving(true);
-    await folioService.resolve(folio.id, resultado);
-    onUpdate({ ...folio, resultado });
-    setResolving(false);
+  async function guardar() {
+    setGuardando(true);
+    await demora(350);
+    onActualizar({ ...folio, titulo: titulo.trim(), cuerpo: cuerpo.trim(), fotos });
+    setGuardando(false);
+    setEditando(false);
   }
 
   return (
     <div className="fade-in" style={{ position: "fixed", inset: 0, zIndex: 50, background: "var(--bg-canvas)", overflowY: "auto" }}>
-      {/* Header */}
       <div className="glass-panel" style={{ position: "sticky", top: 0, zIndex: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 10, borderRadius: 0, borderTop: "none", borderLeft: "none", borderRight: "none" }}>
-        <button onClick={onClose} className="btn-tap" style={{ width: 40, height: 40, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "1px solid var(--border-glass)", color: "var(--text-main)", minHeight: 40 }}>
+        <button onClick={onCerrar} className="btn-tap" style={{ width: 40, height: 40, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "1px solid var(--border-glass)", color: "var(--text-main)", minHeight: 40 }}>
           <ChevronLeft size={20} />
         </button>
-        <div style={{ flex: 1 }}>
-          <p className="font-display" style={{ fontSize: 15, fontWeight: 700 }}>Folio N°{foliostr(folio.folioNumber)}</p>
-          <p style={{ fontSize: 11, color: "var(--text-muted)" }}>{folio.category}</p>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p className="font-display" style={{ fontSize: 15, fontWeight: 700 }}>Folio N°{nFolio(folio.numero)}</p>
+          <p style={{ fontSize: 11, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{LIBROS[folio.libro].nombre}</p>
         </div>
-        {/* Botón Editar: borrador propio, no editando */}
-        {isDraft && isOwner && !editing && (
-          <button onClick={() => setEditing(true)} className="btn-tap"
-            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 10, border: "1px solid var(--border-glass)", background: "var(--bg-glass)", color: "var(--text-main)", fontWeight: 600, fontSize: 12, minHeight: 36 }}>
+        {esBorrador && esAutor && !editando && (
+          <button onClick={() => setEditando(true)} className="btn-tap" style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 10, border: "1px solid var(--border-glass)", background: "none", color: "var(--text-main)", fontWeight: 600, fontSize: 12, minHeight: 36 }}>
             <Edit3 size={14} /> Editar
-          </button>
-        )}
-        {/* Botón Firmar: borrador propio, no editando */}
-        {isDraft && isOwner && !editing && (
-          <button onClick={() => setShowSignModal(true)} className="btn-tap btn-accent"
-            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 10, border: "none", fontWeight: 700, fontSize: 12, minHeight: 36 }}>
-            <FileSignature size={14} /> Firmar
           </button>
         )}
       </div>
 
-      <div style={{ padding: 20, maxWidth: 600, margin: "0 auto" }}>
-        {/* Banner de inmutabilidad — solo folios firmados */}
-        {!isDraft && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, borderRadius: 12, padding: "10px 14px", marginBottom: 16, background: "var(--color-success-bg)", border: "1px solid rgba(16,185,129,0.2)" }}>
-            <Lock size={14} style={{ color: "var(--color-success)", flexShrink: 0 }} />
-            <p style={{ fontSize: 12, color: "var(--color-success)", fontWeight: 600 }}>
-              Folio firmado — Este registro es inmutable conforme al Reglamento de Contratos de Obra Pública.
-            </p>
-          </div>
-        )}
-
-        {/* Badges de estado */}
+      <div style={{ padding: 20, maxWidth: 620, margin: "0 auto", paddingBottom: 40 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, padding: "5px 12px", borderRadius: 8, background: cfg.bg, color: cfg.color }}><CatIcon size={13} /> {folio.category}</span>
-          <span style={{ fontSize: 10, fontWeight: 700, padding: "5px 10px", borderRadius: 6, textTransform: "uppercase", letterSpacing: "0.06em", background: isDraft ? "rgba(0,0,0,0.05)" : "var(--color-success-bg)", color: isDraft ? "var(--text-muted)" : "var(--color-success)" }}>{isDraft ? "Borrador" : "Firmado"}</span>
-          {folio.resultado && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, padding: "5px 12px", borderRadius: 8, background: folio.resultado === "Aprobado" ? "var(--color-success-bg)" : "var(--color-danger-bg)", color: folio.resultado === "Aprobado" ? "var(--color-success)" : "var(--color-danger)" }}>
-              {folio.resultado === "Aprobado" ? <CircleCheck size={13} /> : <CircleX size={13} />} {folio.resultado}
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, padding: "5px 12px", borderRadius: 8, background: cfg.bg, color: cfg.color }}>
+            <IconoCat size={13} /> {folio.categoria}
+          </span>
+          <span style={{ fontSize: 10, fontWeight: 700, padding: "5px 10px", borderRadius: 6, textTransform: "uppercase", letterSpacing: "0.06em", background: esBorrador ? "rgba(0,0,0,0.05)" : "var(--color-success-bg)", color: esBorrador ? "var(--text-muted)" : "var(--color-success)" }}>
+            {esBorrador ? "Borrador" : "Firmado"}
+          </span>
+          {folio.resolucion && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, padding: "5px 12px", borderRadius: 8, background: folio.resolucion.resultado === "Aprobado" ? "var(--color-success-bg)" : "var(--color-danger-bg)", color: folio.resolucion.resultado === "Aprobado" ? "var(--color-success)" : "var(--color-danger)" }}>
+              {folio.resolucion.resultado === "Aprobado" ? <CircleCheck size={13} /> : <CircleX size={13} />} {folio.resolucion.resultado}
             </span>
           )}
         </div>
 
-        {/* Contenido editable */}
-        {editing ? (
+        {!editando && !esBorrador && <BannerInmutabilidad folio={folio} />}
+
+        {editando ? (
           <>
-            <label style={labelStyle}>Título</label>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} style={inputStyle} />
-            <label style={labelStyle}>Descripción</label>
-            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
-            <label style={labelStyle}>Evidencia fotográfica</label>
-            <PhotoCapture photos={photos} onPhotosChange={setPhotos} />
+            <label style={estiloEtiqueta}>Título</label>
+            <input value={titulo} onChange={(e) => setTitulo(e.target.value)} style={estiloCampo} />
+            <label style={estiloEtiqueta}>Descripción técnica</label>
+            <textarea value={cuerpo} onChange={(e) => setCuerpo(e.target.value)} rows={7} style={{ ...estiloCampo, resize: "vertical", fontFamily: "inherit", lineHeight: 1.6 }} />
+            <label style={estiloEtiqueta}>Evidencia fotográfica</label>
+            <CapturaFotos fotos={fotos} onCambio={setFotos} />
             <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button onClick={() => { setEditing(false); setTitle(folio.title); setBody(folio.body); setPhotos(folio.photos || []); }}
+              <button onClick={() => { setEditando(false); setTitulo(folio.titulo); setCuerpo(folio.cuerpo); setFotos(folio.fotos || []); }}
                 className="btn-tap" style={{ flex: 1, padding: "12px 0", borderRadius: 12, border: "1px solid var(--border-glass)", background: "none", color: "var(--text-muted)", fontWeight: 600, fontSize: 14 }}>Cancelar</button>
-              <button onClick={handleSave} disabled={saving || !title.trim() || !body.trim()}
-                className="btn-tap btn-accent" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "12px 0", borderRadius: 12, border: "none", fontWeight: 600, fontSize: 14, opacity: saving ? 0.6 : 1 }}>
-                {saving ? <Loader2 size={16} className="spin" /> : <Save size={16} />} Guardar
+              <button onClick={guardar} disabled={guardando || !titulo.trim() || !cuerpo.trim()} className="btn-tap btn-accent"
+                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "12px 0", borderRadius: 12, border: "none", fontWeight: 600, fontSize: 14, opacity: guardando ? 0.6 : 1 }}>
+                {guardando ? <Loader2 size={16} className="spin" /> : <Save size={16} />} Guardar
               </button>
             </div>
           </>
         ) : (
           <>
-            <h2 className="font-display" style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.4, marginBottom: 12 }}>{folio.title}</h2>
-            <p style={{ fontSize: 14, lineHeight: 1.8, color: "var(--text-muted)", marginBottom: 20 }}>{folio.body}</p>
-            {folio.photos && folio.photos.length > 0 && (
+            <h2 className="font-display" style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.4, marginBottom: 12 }}>{folio.titulo}</h2>
+            <p style={{ fontSize: 14, lineHeight: 1.85, color: "var(--text-muted)", marginBottom: 20, whiteSpace: "pre-wrap" }}>{folio.cuerpo}</p>
+
+            {folio.fotos && folio.fotos.length > 0 && (
               <div style={{ marginBottom: 20 }}>
-                <p style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Evidencia adjunta</p>
-                <div className="photo-grid">{folio.photos.map((p) => <img key={p.id} src={p.preview} alt={p.name} />)}</div>
+                <p style={estiloEtiqueta}>Evidencia adjunta</p>
+                <div className="photo-grid">{folio.fotos.map((p) => <img key={p.id} src={p.preview} alt={p.nombre} />)}</div>
+              </div>
+            )}
+
+            <div className="glass-panel" style={{ borderRadius: 16, padding: 16, marginBottom: 18 }}>
+              <FilaDato etiqueta="Autor" valor={folio.autorNombre} />
+              <FilaDato etiqueta="Perfil" valor={ROLES[folio.autorRol]?.label || "—"} />
+              <FilaDato etiqueta="Creado" valor={fechaHora(folio.creadoEn)} ultimo={esBorrador} />
+              {!esBorrador && <FilaDato etiqueta="Firmado" valor={fechaHora(folio.firmadoEn)} ultimo />}
+            </div>
+
+            {folio.resolucion && (
+              <div className="glass-panel" style={{ borderRadius: 16, padding: 17, marginBottom: 18, borderLeft: `3px solid ${folio.resolucion.resultado === "Aprobado" ? "var(--color-success)" : "var(--color-danger)"}` }}>
+                <p style={{ ...estiloEtiqueta, marginBottom: 10 }}>Resolución del Inspector Fiscal</p>
+                <p style={{ fontSize: 13.5, lineHeight: 1.75, color: "var(--text-main)", marginBottom: 12, whiteSpace: "pre-wrap" }}>{folio.resolucion.observacion}</p>
+                <div style={{ borderTop: "1px solid var(--border-glass)", paddingTop: 10 }}>
+                  <FilaDato etiqueta="Resuelto por" valor={folio.resolucion.porNombre} />
+                  <FilaDato etiqueta="Fecha" valor={fechaHora(folio.resolucion.fecha)} ultimo />
+                </div>
+              </div>
+            )}
+
+            {esBorrador && (
+              <div style={{ borderRadius: 14, padding: 14, marginBottom: 18, background: "var(--color-warning-bg)", border: "1px solid var(--border-glass)", display: "flex", gap: 10 }}>
+                <FileText size={17} style={{ color: "var(--color-warning)", flexShrink: 0, marginTop: 1 }} />
+                <p style={{ fontSize: 12, lineHeight: 1.65, color: "var(--text-muted)" }}>
+                  Este folio es un borrador y aún no forma parte del libro. Mientras no se firme, puede editarse y no tiene valor legal.
+                </p>
+              </div>
+            )}
+
+            {esBorrador && esAutor && (
+              <button onClick={() => onFirmar(folio)} className="btn-tap btn-accent"
+                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 9, fontSize: 15, fontWeight: 600, borderRadius: 14, padding: "15px 0", border: "none" }}>
+                <FileSignature size={19} /> Firmar e incorporar al libro
+              </button>
+            )}
+
+            {puedeResolver && (
+              <div>
+                <p style={{ ...estiloEtiqueta, marginBottom: 10 }}>Pronunciamiento del Inspector Fiscal</p>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button onClick={() => onAprobar(folio)} className="btn-tap"
+                    style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "14px 0", borderRadius: 13, border: "none", background: "var(--color-success)", color: "#fff", fontWeight: 600, fontSize: 14 }}>
+                    <CircleCheck size={17} /> Aprobar
+                  </button>
+                  <button onClick={() => onRechazar(folio)} className="btn-tap"
+                    style={{ flex: 1.35, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "14px 0", borderRadius: 13, border: "none", background: "var(--color-danger)", color: "#fff", fontWeight: 600, fontSize: 13.5 }}>
+                    <CircleX size={17} /> Rechazar con observaciones
+                  </button>
+                </div>
               </div>
             )}
           </>
         )}
-
-        {/* Botones Aprobar / Rechazar — Inspector Fiscal */}
-        {canResolve && !editing && (
-          <div style={{ marginTop: 8, marginBottom: 16 }}>
-            <p style={labelStyle}>Resolución del Inspector Fiscal</p>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button
-                onClick={() => handleResolve("Aprobado")}
-                disabled={resolving}
-                className="btn-tap"
-                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px 0", borderRadius: 12, border: "none", fontWeight: 700, fontSize: 14, background: "var(--color-success-bg)", color: "var(--color-success)", opacity: resolving ? 0.6 : 1 }}
-              >
-                {resolving ? <Loader2 size={16} className="spin" /> : <CircleCheck size={18} />} Aprobar
-              </button>
-              <button
-                onClick={() => handleResolve("Rechazado")}
-                disabled={resolving}
-                className="btn-tap"
-                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px 0", borderRadius: 12, border: "none", fontWeight: 700, fontSize: 14, background: "var(--color-danger-bg)", color: "var(--color-danger)", opacity: resolving ? 0.6 : 1 }}
-              >
-                {resolving ? <Loader2 size={16} className="spin" /> : <CircleX size={18} />} Rechazar
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Metadatos */}
-        {!editing && (
-          <div className="glass-panel" style={{ borderRadius: 16, padding: 16, marginTop: 10 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontSize: 12 }}>
-              <div><p style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 600, textTransform: "uppercase", marginBottom: 2 }}>Creado por</p><p style={{ fontWeight: 600 }}>{folio.creatorName}</p></div>
-              <div><p style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 600, textTransform: "uppercase", marginBottom: 2 }}>Fecha</p><p style={{ fontWeight: 500 }}>{formatDateTime(folio.createdAt)}</p></div>
-              {folio.signature && <div><p style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 600, textTransform: "uppercase", marginBottom: 2 }}>Código de firma</p><p className="font-mono" style={{ fontWeight: 600, fontSize: 11 }}>{folio.signature.code}</p></div>}
-              {folio.signedAt && <div><p style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 600, textTransform: "uppercase", marginBottom: 2 }}>Firmado el</p><p style={{ fontWeight: 500 }}>{formatDateTime(folio.signedAt)}</p></div>}
-            </div>
-          </div>
-        )}
       </div>
-
-      {/* Modal de firma */}
-      {showSignModal && (
-        <SignatureModal folio={folio} role={role} onCancel={() => setShowSignModal(false)} onSigned={handleSigned} />
-      )}
     </div>
   );
 }
 
 /* ================================================================== */
-/*  FOLIO CARD                                                         */
+/*  TARJETA DE FOLIO                                                   */
 /* ================================================================== */
-function FolioCard({ folio, currentRole, onClick }) {
-  const cfg = CATEGORY_CONFIG[folio.category] || CATEGORY_CONFIG["Instrucción"];
-  const isDraft = folio.status === "borrador";
-  const CatIcon = cfg.Icon;
+function TarjetaFolio({ folio, onAbrir, resaltarPendiente }) {
+  const cfg = CATEGORIAS[folio.categoria] || CATEGORIAS["Instrucción Inspector Fiscal"];
+  const esBorrador = folio.estado === "borrador";
+  const IconoCat = cfg.Icon;
   return (
-    <article className="glass-panel fade-in" style={{ borderRadius: 20, padding: 18, cursor: "pointer" }} onClick={() => onClick(folio)}>
+    <article className="glass-panel fade-in" style={{ borderRadius: 20, padding: 18, cursor: "pointer" }} onClick={() => onAbrir(folio)}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-        <span className="font-mono" style={{ fontSize: 10, fontWeight: 700, padding: "4px 8px", borderRadius: 6, background: "var(--accent)", color: "#fff" }}>N°{foliostr(folio.folioNumber)}</span>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 600, padding: "4px 8px", borderRadius: 6, background: cfg.bg, color: cfg.color }}><CatIcon size={11} /> {folio.category}</span>
-        {folio.resultado && (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 6, background: folio.resultado === "Aprobado" ? "var(--color-success-bg)" : "var(--color-danger-bg)", color: folio.resultado === "Aprobado" ? "var(--color-success)" : "var(--color-danger)" }}>
-            {folio.resultado === "Aprobado" ? <CircleCheck size={11} /> : <CircleX size={11} />} {folio.resultado}
+        <span className="font-mono" style={{ fontSize: 10, fontWeight: 700, padding: "4px 8px", borderRadius: 6, background: "var(--accent)", color: "#fff" }}>N°{nFolio(folio.numero)}</span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 600, padding: "4px 8px", borderRadius: 6, background: cfg.bg, color: cfg.color }}>
+          <IconoCat size={11} /> {cfg.corto}
+        </span>
+        {folio.resolucion && (
+          <span style={{ fontSize: 9.5, fontWeight: 700, padding: "3px 7px", borderRadius: 5, textTransform: "uppercase", letterSpacing: "0.05em", background: folio.resolucion.resultado === "Aprobado" ? "var(--color-success-bg)" : "var(--color-danger-bg)", color: folio.resolucion.resultado === "Aprobado" ? "var(--color-success)" : "var(--color-danger)" }}>
+            {folio.resolucion.resultado}
           </span>
         )}
-        <span style={{ marginLeft: "auto", fontSize: 9, fontWeight: 700, padding: "3px 7px", borderRadius: 5, textTransform: "uppercase", letterSpacing: "0.06em", background: isDraft ? "rgba(0,0,0,0.05)" : "var(--color-success-bg)", color: isDraft ? "var(--text-muted)" : "var(--color-success)" }}>{isDraft ? "Borrador" : "Firmado"}</span>
+        {resaltarPendiente && !folio.resolucion && !esBorrador && (
+          <span style={{ fontSize: 9.5, fontWeight: 700, padding: "3px 7px", borderRadius: 5, textTransform: "uppercase", letterSpacing: "0.05em", background: "var(--color-warning-bg)", color: "var(--color-warning)" }}>
+            Requiere tu pronunciamiento
+          </span>
+        )}
+        <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 700, padding: "3px 7px", borderRadius: 5, textTransform: "uppercase", letterSpacing: "0.06em", background: esBorrador ? "rgba(0,0,0,0.05)" : "var(--color-success-bg)", color: esBorrador ? "var(--text-muted)" : "var(--color-success)" }}>
+          {!esBorrador && <ShieldCheck size={10} />} {esBorrador ? "Borrador" : "Firmado"}
+        </span>
       </div>
-      <h3 className="font-display" style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.4, marginBottom: 6 }}>{folio.title}</h3>
-      <p style={{ fontSize: 12, lineHeight: 1.6, color: "var(--text-muted)", marginBottom: 10, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{folio.body}</p>
+      <h3 className="font-display" style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.4, marginBottom: 6 }}>{folio.titulo}</h3>
+      <p style={{ fontSize: 12, lineHeight: 1.6, color: "var(--text-muted)", marginBottom: 10, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{folio.cuerpo}</p>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 10, borderTop: "1px solid var(--border-glass)" }}>
-        <div>
-          <p style={{ fontSize: 11, fontWeight: 500, color: "var(--text-muted)" }}>{folio.creatorName}</p>
-          <p style={{ fontSize: 10, color: "var(--text-muted)", opacity: 0.6 }}>{formatDateTime(folio.createdAt)}</p>
+        <div style={{ minWidth: 0 }}>
+          <p style={{ fontSize: 11, fontWeight: 500, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{folio.autorNombre}</p>
+          <p style={{ fontSize: 10, color: "var(--text-muted)", opacity: 0.6 }}>{fechaHora(folio.creadoEn)}</p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 500, color: "var(--accent)" }}><Eye size={14} /> Ver</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 500, color: "var(--accent)", flexShrink: 0 }}><Eye size={14} /> Ver</div>
       </div>
     </article>
   );
 }
 
 /* ================================================================== */
-/*  DASHBOARD                                                          */
+/*  PANTALLA DE CONTRATO (dashboard)                                   */
 /* ================================================================== */
-function ProjectScreen({ projects, selectedProjectId, foliosByProject, onSelectProject, onStatClick }) {
-  const project = projects.find((p) => p.id === selectedProjectId);
-  const folios = foliosByProject[selectedProjectId] || [];
-  const firmados = folios.filter((f) => f.status === "firmado").length;
-  const incidentes = folios.filter((f) => f.category === "Incidente").length;
+function PantallaContrato({ contratoId, folios, rol, onSeleccionar, onIrABitacora, onVerificar }) {
+  const contrato = CONTRATOS.find((c) => c.id === contratoId);
+  const firmados = folios.filter((f) => f.estado === "firmado").length;
+  const borradores = folios.filter((f) => f.estado === "borrador").length;
+  const pendientes = folios.filter((f) => f.estado === "firmado" && !f.resolucion && CATEGORIAS_RESOLUBLES.includes(f.categoria) && f.autorRol !== "inspector_fiscal").length;
 
-  const stats = [
-    { label: "Folios", value: folios.length, color: "var(--accent)", filter: "Todas" },
-    { label: "Firmados", value: firmados, color: "var(--color-success)", filter: "__firmados" },
-    { label: "Incidentes", value: incidentes, color: "var(--color-danger)", filter: "Incidente" },
+  const tarjetas = [
+    { etiqueta: "Folios", valor: folios.length, color: "var(--accent)", filtro: "Todas" },
+    { etiqueta: "Firmados", valor: firmados, color: "var(--color-success)", filtro: "__firmados" },
+    { etiqueta: rol.puedeResolver ? "Por resolver" : "Borradores", valor: rol.puedeResolver ? pendientes : borradores, color: "var(--color-warning)", filtro: rol.puedeResolver ? "__pendientes" : "__borradores" },
   ];
 
   return (
     <div className="fade-in" style={{ padding: 20 }}>
-      {/* Contrato activo */}
       <div className="glass-panel" style={{ borderRadius: 22, padding: 22, marginBottom: 16, position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", top: 0, right: 0, width: 120, height: 120, borderRadius: "50%", background: "var(--accent-glow)", filter: "blur(50px)", pointerEvents: "none" }} />
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 14, position: "relative", zIndex: 1 }}>
-          <div style={{ width: 42, height: 42, borderRadius: 14, background: "var(--accent-glow)", color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Building2 size={20} /></div>
-          <div>
-            <p className="font-display" style={{ fontSize: 17, fontWeight: 700, lineHeight: 1.3 }}>{project.name}</p>
-            <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3, display: "flex", alignItems: "center", gap: 4 }}><MapPin size={11} /> {project.address}</p>
-            <p className="font-mono" style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>{project.permit}</p>
-          </div>
-        </div>
         <div style={{ position: "relative", zIndex: 1 }}>
+          <span className="font-mono" style={{ fontSize: 10, fontWeight: 700, padding: "4px 9px", borderRadius: 6, background: "var(--accent-glow)", color: "var(--accent)", display: "inline-block", marginBottom: 10 }}>
+            {contrato.codigo}
+          </span>
+          <p className="font-display" style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.35, marginBottom: 6 }}>{contrato.nombre}</p>
+          <p style={{ fontSize: 11.5, color: "var(--text-muted)", display: "flex", alignItems: "flex-start", gap: 5, marginBottom: 16, lineHeight: 1.5 }}>
+            <MapPin size={12} style={{ flexShrink: 0, marginTop: 2 }} /> {contrato.ubicacion}
+          </p>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+            <DatoContrato etiqueta="Contratista" valor={contrato.contratista} />
+            <DatoContrato etiqueta="Inspector Fiscal" valor={ROLES.inspector_fiscal.nombre} />
+            <DatoContrato etiqueta="Monto" valor={contrato.monto} />
+            <DatoContrato etiqueta="Plazo" valor={contrato.plazo} />
+          </div>
+
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
             <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Avance físico</span>
-            <span className="font-mono" style={{ fontSize: 14, fontWeight: 700, color: "var(--accent)" }}>{project.progress}%</span>
+            <span className="font-mono" style={{ fontSize: 14, fontWeight: 700, color: "var(--accent)" }}>{contrato.avance}%</span>
           </div>
           <div style={{ width: "100%", height: 8, borderRadius: 4, background: "rgba(0,0,0,0.08)", overflow: "hidden" }}>
-            <div style={{ width: `${project.progress}%`, height: "100%", borderRadius: 4, background: `linear-gradient(90deg, var(--accent), var(--color-info))`, boxShadow: `0 0 12px var(--accent-glow)`, transition: "width 0.6s ease" }} />
+            <div style={{ width: `${contrato.avance}%`, height: "100%", borderRadius: 4, background: "linear-gradient(90deg, var(--accent), var(--color-info))", boxShadow: "0 0 12px var(--accent-glow)", transition: "width 0.6s ease" }} />
           </div>
         </div>
       </div>
 
-      {/* Stats clickables */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
-        {stats.map((s) => (
-          <button key={s.label} onClick={() => onStatClick(s.filter)} className="glass-panel btn-tap" style={{ borderRadius: 16, padding: "18px 10px", textAlign: "center", cursor: "pointer", minHeight: "auto" }}>
-            <p className="font-display" style={{ fontSize: 26, fontWeight: 700, color: s.color }}>{s.value}</p>
-            <p style={{ fontSize: 10, marginTop: 3, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>{s.label}</p>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 14 }}>
+        {tarjetas.map((s) => (
+          <button key={s.etiqueta} onClick={() => onIrABitacora(s.filtro)} className="glass-panel btn-tap"
+            style={{ borderRadius: 16, padding: "18px 8px", textAlign: "center", cursor: "pointer", minHeight: "auto" }}>
+            <p className="font-display" style={{ fontSize: 26, fontWeight: 700, color: s.color }}>{s.valor}</p>
+            <p style={{ fontSize: 9.5, marginTop: 3, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600 }}>{s.etiqueta}</p>
           </button>
         ))}
       </div>
 
-      {/* Lista de contratos */}
-      <p style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>Todos los Contratos</p>
+      <button onClick={onVerificar} className="glass-panel btn-tap"
+        style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, borderRadius: 16, padding: 16, marginBottom: 20, cursor: "pointer", textAlign: "left", minHeight: "auto" }}>
+        <div style={{ width: 38, height: 38, borderRadius: 12, background: "var(--color-success-bg)", color: "var(--color-success)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <ShieldCheck size={19} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p className="font-display" style={{ fontSize: 13.5, fontWeight: 700 }}>Verificar integridad del libro</p>
+          <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>Recalcula los sellos y detecta alteraciones</p>
+        </div>
+        <ChevronRight size={18} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
+      </button>
+
+      <p style={{ ...estiloEtiqueta, marginBottom: 12 }}>Contratos asignados</p>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {projects.map((p) => {
-          const active = p.id === selectedProjectId;
-          const pFolios = foliosByProject[p.id] || [];
+        {CONTRATOS.map((c) => {
+          const activo = c.id === contratoId;
           return (
-            <button key={p.id} onClick={() => onSelectProject(p.id)} className="glass-panel btn-tap"
-              style={{ borderRadius: 16, padding: 16, textAlign: "left", cursor: "pointer", minHeight: "auto", borderColor: active ? "var(--accent)" : undefined, boxShadow: active ? `0 0 12px var(--accent-glow)` : undefined }}>
+            <button key={c.id} onClick={() => onSeleccionar(c.id)} className="glass-panel btn-tap"
+              style={{ borderRadius: 16, padding: 15, textAlign: "left", cursor: "pointer", minHeight: "auto", borderColor: activo ? "var(--accent)" : undefined, boxShadow: activo ? "0 0 12px var(--accent-glow)" : undefined }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 38, height: 38, borderRadius: 12, background: active ? "var(--accent)" : "rgba(0,0,0,0.04)", color: active ? "#fff" : "var(--text-muted)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Building2 size={18} /></div>
+                <div style={{ width: 38, height: 38, borderRadius: 12, background: activo ? "var(--accent)" : "rgba(0,0,0,0.04)", color: activo ? "#fff" : "var(--text-muted)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <Building2 size={18} />
+                </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <p className="font-display" style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</p>
-                  <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{pFolios.length} folios · {p.progress}% avance</p>
-                  <p className="font-mono" style={{ fontSize: 10, color: "var(--text-muted)", opacity: 0.7, marginTop: 1 }}>{p.permit}</p>
+                  <p className="font-mono" style={{ fontSize: 9.5, color: "var(--text-muted)", marginBottom: 2 }}>{c.codigo}</p>
+                  <p className="font-display" style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.35, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nombre}</p>
+                  <p style={{ fontSize: 10.5, color: "var(--text-muted)", marginTop: 2 }}>{c.avance}% de avance</p>
                 </div>
               </div>
             </button>
@@ -859,68 +1214,92 @@ function ProjectScreen({ projects, selectedProjectId, foliosByProject, onSelectP
   );
 }
 
-/* ================================================================== */
-/*  UI COMPONENTS                                                      */
-/* ================================================================== */
-function ThemeToggle({ isDark, toggleDark }) {
+function DatoContrato({ etiqueta, valor }) {
   return (
-    <button onClick={toggleDark} className="btn-tap glass-panel" style={{ width: 40, height: 40, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: "1px solid var(--border-glass)", color: "var(--text-main)" }} aria-label="Cambiar tema">
-      {isDark ? <Sun size={18} /> : <Moon size={18} />}
+    <div>
+      <p style={{ fontSize: 9.5, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>{etiqueta}</p>
+      <p style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.35 }}>{valor}</p>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  COMPONENTES DE INTERFAZ                                            */
+/* ================================================================== */
+function BotonTema({ oscuro, alternar }) {
+  return (
+    <button onClick={alternar} className="btn-tap glass-panel" aria-label="Cambiar tema"
+      style={{ width: 38, height: 38, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: "1px solid var(--border-glass)", color: "var(--text-main)", minHeight: 38 }}>
+      {oscuro ? <Sun size={17} /> : <Moon size={17} />}
     </button>
   );
 }
 
-function LoginScreen({ onLogin, isDark, toggleDark }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+function PantallaLogin({ onIngresar, oscuro, alternar }) {
+  const [usuario, setUsuario] = useState("");
+  const [clave, setClave] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [cargando, setCargando] = useState(false);
 
-  async function handleSubmit() {
+  async function ingresar() {
     setError("");
-    if (!email.trim() || !password) { setError("Ingresa tu usuario y contraseña."); return; }
-    setLoading(true);
-    try { onLogin(await authService.login(email, password)); } catch (e) { setError(e.message); setLoading(false); }
+    if (!usuario.trim() || !clave) { setError("Ingresa tu usuario y contraseña."); return; }
+    setCargando(true);
+    try { onIngresar(await authService.login(usuario, clave)); }
+    catch (e) { setError(e.message); setCargando(false); }
   }
+
+  const cuentas = [
+    { usuario: "cristian", rol: "Inspector Fiscal · MOP" },
+    { usuario: "mauricio", rol: "Administrador de Contrato" },
+    { usuario: "prevencion", rol: "Prevencionista de Riesgos" },
+  ];
 
   return (
     <div className="fade-in login-bg" style={{ minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", padding: "40px 24px" }}>
-      <div style={{ position: "absolute", top: 16, right: 16, zIndex: 10 }}><ThemeToggle isDark={isDark} toggleDark={toggleDark} /></div>
-      <div style={{ width: "100%", maxWidth: 380, margin: "0 auto", position: "relative", zIndex: 1 }}>
-        <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <div className="glass-panel" style={{ width: 64, height: 64, borderRadius: 20, display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
-            <BookMarked size={32} style={{ color: "var(--accent)" }} />
+      <div style={{ position: "absolute", top: 16, right: 16, zIndex: 10 }}><BotonTema oscuro={oscuro} alternar={alternar} /></div>
+      <div style={{ width: "100%", maxWidth: 390, margin: "0 auto", position: "relative", zIndex: 1 }}>
+        <div style={{ textAlign: "center", marginBottom: 34 }}>
+          <div className="glass-panel" style={{ width: 60, height: 60, borderRadius: 18, display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 18 }}>
+            <BookMarked size={30} style={{ color: "var(--accent)" }} />
           </div>
-          <h1 className="font-display" style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 6 }}>Libro de Obra Digital</h1>
-          <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Contratos de Obra Pública MOP · Bitácora inmutable</p>
+          <h1 className="font-display" style={{ fontSize: 27, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 6 }}>Libro de Obra Digital</h1>
+          <p style={{ fontSize: 12.5, color: "var(--text-muted)", lineHeight: 1.5 }}>Contratos de obra pública · Registro foliado e inmutable</p>
         </div>
-        <div className="glass-panel" style={{ borderRadius: 24, padding: 28 }}>
-          <div style={{ marginBottom: 18 }}>
-            <label style={labelStyle}>Usuario</label>
-            <input value={email} onChange={(e) => { setEmail(e.target.value); setError(""); }} type="text" autoCapitalize="none" placeholder="cristian" style={{ ...inputStyle, marginBottom: 0 }} />
+
+        <div className="glass-panel" style={{ borderRadius: 24, padding: 26 }}>
+          <div style={{ marginBottom: 16 }}>
+            <label style={estiloEtiqueta}>Usuario</label>
+            <input value={usuario} onChange={(e) => { setUsuario(e.target.value); setError(""); }} type="text" autoCapitalize="none" autoCorrect="off" placeholder="cristian" style={{ ...estiloCampo, marginBottom: 0 }} />
           </div>
-          <div style={{ marginBottom: 18 }}>
-            <label style={labelStyle}>Contraseña</label>
-            <input value={password} onChange={(e) => { setPassword(e.target.value); setError(""); }} type="password" placeholder="••••••••" onKeyDown={(e) => e.key === "Enter" && handleSubmit()} style={{ ...inputStyle, marginBottom: 0 }} />
+          <div style={{ marginBottom: 16 }}>
+            <label style={estiloEtiqueta}>Contraseña</label>
+            <input value={clave} onChange={(e) => { setClave(e.target.value); setError(""); }} type="password" placeholder="••••••"
+              onKeyDown={(e) => e.key === "Enter" && ingresar()} style={{ ...estiloCampo, marginBottom: 0 }} />
           </div>
-          {error && (<div className="fade-in" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, borderRadius: 14, padding: "12px 14px", marginBottom: 16, background: "var(--color-danger-bg)", color: "var(--color-danger)" }}><TriangleAlert size={16} style={{ flexShrink: 0 }} /> {error}</div>)}
-          <button onClick={handleSubmit} disabled={loading} className="btn-tap btn-accent" style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 15, fontWeight: 600, borderRadius: 14, padding: "14px 0", border: "none", opacity: loading ? 0.7 : 1 }}>
-            {loading ? <Loader2 size={18} className="spin" /> : <Lock size={17} />} {loading ? "Verificando…" : "Ingresar"}
-          </button>
-          <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border-glass)", textAlign: "center" }}>
-            <p style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>Accesos Demo</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {[
-                { user: "cristian · 123", role: "Inspector Fiscal MOP" },
-                { user: "mauricio · 123", role: "Administrador de Contrato" },
-                { user: "prevencion · 123", role: "Prevencionista de Riesgos" },
-              ].map((c) => (
-                <div key={c.user} style={{ borderRadius: 10, padding: "8px 12px", background: "rgba(0,0,0,0.03)", border: "1px solid var(--border-glass)" }}>
-                  <p className="font-mono" style={{ fontSize: 11, color: "var(--text-muted)" }}>{c.user}</p>
-                  <p style={{ fontSize: 10, color: "var(--text-muted)", opacity: 0.7 }}>{c.role}</p>
-                </div>
-              ))}
+          {error && (
+            <div className="fade-in" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, borderRadius: 14, padding: "12px 14px", marginBottom: 14, background: "var(--color-danger-bg)", color: "var(--color-danger)" }}>
+              <TriangleAlert size={16} style={{ flexShrink: 0 }} /> {error}
             </div>
+          )}
+          <button onClick={ingresar} disabled={cargando} className="btn-tap btn-accent"
+            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 15, fontWeight: 600, borderRadius: 14, padding: "14px 0", border: "none", opacity: cargando ? 0.7 : 1 }}>
+            {cargando ? <Loader2 size={18} className="spin" /> : <Lock size={17} />} {cargando ? "Verificando…" : "Ingresar"}
+          </button>
+
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border-glass)" }}>
+            <p style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10, textAlign: "center" }}>Perfiles de demostración</p>
+            {cuentas.map((c) => (
+              <button key={c.usuario} onClick={() => { setUsuario(c.usuario); setClave("123"); setError(""); }}
+                className="btn-tap"
+                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "9px 12px", marginBottom: 6, borderRadius: 10, border: "1px solid var(--border-glass)", background: "none", cursor: "pointer", minHeight: "auto", textAlign: "left" }}>
+                <div style={{ minWidth: 0 }}>
+                  <p className="font-mono" style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-main)" }}>{c.usuario} · 123</p>
+                  <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>{c.rol}</p>
+                </div>
+                <ChevronRight size={15} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -929,184 +1308,326 @@ function LoginScreen({ onLogin, isDark, toggleDark }) {
 }
 
 /* ================================================================== */
-/*  APP PRINCIPAL                                                      */
+/*  APLICACIÓN                                                         */
 /* ================================================================== */
-function AppContent() {
-  const [session, setSession] = useState(null);
-  const [foliosByProject, setFoliosByProject] = useState({});
-  const [loading, setLoading] = useState(true);
+function Aplicacion() {
+  const [sesion, setSesion] = useState(null);
+  const [foliosPorContrato, setFoliosPorContrato] = useState({});
+  const [cargando, setCargando] = useState(true);
   const [tab, setTab] = useState("bitacora");
-  const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("Todas");
-  const [showNew, setShowNew] = useState(false);
-  const [isDark, setIsDark] = useState(false);
-  const [selectedProjectId, setSelectedProjectId] = useState(PROJECTS[0].id);
-  const [viewingFolio, setViewingFolio] = useState(null);
+  const [contratoId, setContratoId] = useState(CONTRATOS[0].id);
+  const [libro, setLibro] = useState("maestro");
+  const [busqueda, setBusqueda] = useState("");
+  const [filtro, setFiltro] = useState("Todas");
+  const [nuevoAbierto, setNuevoAbierto] = useState(false);
+  const [verFolioId, setVerFolioId] = useState(null);
+  const [firmarId, setFirmarId] = useState(null);
+  const [rechazarId, setRechazarId] = useState(null);
+  const [integridadAbierta, setIntegridadAbierta] = useState(false);
+  const [oscuro, setOscuro] = useState(false);
 
   useEffect(() => {
-    const root = document.documentElement;
-    if (isDark) root.classList.add("dark"); else root.classList.remove("dark");
-  }, [isDark]);
+    const raiz = document.documentElement;
+    if (oscuro) raiz.classList.add("dark"); else raiz.classList.remove("dark");
+  }, [oscuro]);
 
-  const role = session?.role;
-  const currentRole = role ? ROLES[role] : null;
-  const folios = foliosByProject[selectedProjectId] || [];
+  const rol = sesion ? ROLES[sesion.rol] : null;
+  const folios = useMemo(() => foliosPorContrato[contratoId] || [], [foliosPorContrato, contratoId]);
 
+  // Carga inicial: se sella la cadena de todos los libros de cada contrato.
   useEffect(() => {
-    if (!session) return;
-    setLoading(true);
-    const timer = setTimeout(() => { setFoliosByProject({ ...ALL_FOLIOS }); setLoading(false); }, 500);
-    return () => clearTimeout(timer);
-  }, [session]);
+    if (!sesion) return;
+    let cancelado = false;
+    setCargando(true);
+    (async () => {
+      const datos = {};
+      for (const clave of Object.keys(FOLIOS_DEMO)) {
+        datos[clave] = await sellarCadenas(FOLIOS_DEMO[clave].map((f) => ({ ...f })));
+      }
+      await demora(400);
+      if (!cancelado) { setFoliosPorContrato(datos); setCargando(false); }
+    })();
+    return () => { cancelado = true; };
+  }, [sesion]);
 
-  const nextFolioNumber = useMemo(() => Math.max(0, ...folios.map((f) => f.folioNumber)) + 1, [folios]);
+  // Al cambiar de perfil, situarse en el libro donde ese perfil escribe.
+  useEffect(() => {
+    if (rol) setLibro(rol.escribeEn[0] || "maestro");
+  }, [rol]);
 
-  const visibleFolios = useMemo(() => {
-    if (!role) return [];
+  const puedeEscribir = rol ? rol.escribeEn.includes(libro) : false;
+  const siguienteNumero = useMemo(() => {
+    const delLibro = folios.filter((f) => f.libro === libro);
+    return delLibro.reduce((max, f) => Math.max(max, f.numero), 0) + 1;
+  }, [folios, libro]);
+
+  const visibles = useMemo(() => {
     return folios
+      .filter((f) => f.libro === libro)
       .filter((f) => {
-        if (categoryFilter === "Todas") return true;
-        if (categoryFilter === "__firmados") return f.status === "firmado";
-        return f.category === categoryFilter;
+        if (filtro === "Todas") return true;
+        if (filtro === "__firmados") return f.estado === "firmado";
+        if (filtro === "__borradores") return f.estado === "borrador";
+        if (filtro === "__pendientes") return f.estado === "firmado" && !f.resolucion && CATEGORIAS_RESOLUBLES.includes(f.categoria) && f.autorRol !== "inspector_fiscal";
+        return f.categoria === filtro;
       })
       .filter((f) => {
-        if (!search.trim()) return true;
-        const q = search.toLowerCase();
-        return f.title.toLowerCase().includes(q) || f.body.toLowerCase().includes(q) || String(f.folioNumber).includes(q);
+        if (!busqueda.trim()) return true;
+        const q = busqueda.toLowerCase();
+        return f.titulo.toLowerCase().includes(q) || f.cuerpo.toLowerCase().includes(q) || String(f.numero).includes(q);
       })
-      .sort((a, b) => b.folioNumber - a.folioNumber);
-  }, [folios, role, categoryFilter, search]);
+      .sort((a, b) => b.numero - a.numero);
+  }, [folios, libro, filtro, busqueda]);
 
-  const handleLogout = useCallback(() => {
-    setSession(null); setFoliosByProject({}); setTab("bitacora");
-    setSearch(""); setCategoryFilter("Todas"); setViewingFolio(null);
+  const folioActivo = verFolioId ? folios.find((f) => f.id === verFolioId) : null;
+  const folioAFirmar = firmarId ? folios.find((f) => f.id === firmarId) : null;
+  const folioARechazar = rechazarId ? folios.find((f) => f.id === rechazarId) : null;
+
+  const salir = useCallback(() => {
+    setSesion(null); setFoliosPorContrato({}); setTab("bitacora");
+    setBusqueda(""); setFiltro("Todas"); setVerFolioId(null);
+    setFirmarId(null); setRechazarId(null); setIntegridadAbierta(false);
   }, []);
 
-  function handleNewFolioSave(folio) {
-    setFoliosByProject((prev) => ({ ...prev, [selectedProjectId]: [...(prev[selectedProjectId] || []), folio] }));
-    setShowNew(false);
+  function actualizarFolio(actualizado) {
+    setFoliosPorContrato((prev) => ({
+      ...prev,
+      [contratoId]: (prev[contratoId] || []).map((f) => (f.id === actualizado.id ? actualizado : f)),
+    }));
   }
 
-  function handleUpdateFolio(updated) {
-    setFoliosByProject((prev) => ({ ...prev, [selectedProjectId]: (prev[selectedProjectId] || []).map((f) => f.id === updated.id ? updated : f) }));
-    setViewingFolio(updated);
+  function guardarNuevo(folio) {
+    setFoliosPorContrato((prev) => ({ ...prev, [contratoId]: [...(prev[contratoId] || []), folio] }));
+    setNuevoAbierto(false);
+    setVerFolioId(folio.id);
   }
 
-  function handleStatClick(filter) { setCategoryFilter(filter); setTab("bitacora"); }
+  const firmarFolio = useCallback(async () => {
+    const actuales = foliosPorContrato[contratoId] || [];
+    const objetivo = actuales.find((f) => f.id === firmarId);
+    if (!objetivo) throw new Error("Folio no encontrado");
+    const cadena = cadenaDe(actuales, objetivo.libro);
+    const previo = cadena.length ? cadena[cadena.length - 1].firma.hash : "GENESIS";
+    const firmado = await folioService.firmar(objetivo, previo);
+    setFoliosPorContrato((prev) => ({
+      ...prev,
+      [contratoId]: (prev[contratoId] || []).map((f) => (f.id === firmado.id ? firmado : f)),
+    }));
+    return firmado;
+  }, [foliosPorContrato, contratoId, firmarId]);
 
-  if (!session) return <LoginScreen onLogin={setSession} isDark={isDark} toggleDark={() => setIsDark(!isDark)} />;
+  async function resolver(folio, resultado, observacion) {
+    const resolucion = {
+      resultado, observacion,
+      porNombre: rol.nombre, porRol: rol.clave,
+      fecha: new Date().toISOString(),
+    };
+    await folioService.resolver(folio.id, resolucion);
+    actualizarFolio({ ...folio, resolucion });
+  }
 
-  if (viewingFolio) {
+  function adulterar(folioId) {
+    setFoliosPorContrato((prev) => ({
+      ...prev,
+      [contratoId]: (prev[contratoId] || []).map((f) =>
+        f.id === folioId ? { ...f, cuerpo: f.cuerpo + " (texto modificado directamente en la base de datos)" } : f
+      ),
+    }));
+  }
+
+  if (!sesion) {
     return (
-      <FolioDetail
-        folio={viewingFolio}
-        role={role}
-        onClose={() => setViewingFolio(null)}
-        onUpdate={handleUpdateFolio}
-      />
+      <>
+        <EstilosLocales />
+        <PantallaLogin onIngresar={setSesion} oscuro={oscuro} alternar={() => setOscuro(!oscuro)} />
+      </>
     );
   }
 
+  if (folioActivo) {
+    return (
+      <>
+        <EstilosLocales />
+        <DetalleFolio
+          folio={folioActivo} rol={rol}
+          onCerrar={() => setVerFolioId(null)}
+          onActualizar={actualizarFolio}
+          onFirmar={(f) => setFirmarId(f.id)}
+          onAprobar={(f) => resolver(f, "Aprobado", "Se aprueba lo informado, sin observaciones.")}
+          onRechazar={(f) => setRechazarId(f.id)}
+        />
+        {folioAFirmar && (
+          <ModalFirma folio={folioAFirmar} rol={rol} onFirmar={firmarFolio} onCerrar={() => setFirmarId(null)} />
+        )}
+        {folioARechazar && (
+          <ModalRechazo folio={folioARechazar}
+            onCerrar={() => setRechazarId(null)}
+            onConfirmar={async (texto) => { await resolver(folioARechazar, "Rechazado", texto); setRechazarId(null); }} />
+        )}
+      </>
+    );
+  }
+
+  const contrato = CONTRATOS.find((c) => c.id === contratoId);
+
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      <EstilosLocales />
+
       <header className="glass-panel" style={{ position: "sticky", top: 0, zIndex: 30, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10, borderRadius: 0, borderTop: "none", borderLeft: "none", borderRight: "none" }}>
-        <div style={{ width: 38, height: 38, borderRadius: 12, background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: `0 0 16px var(--accent-glow)` }}><BookMarked size={18} color="#fff" /></div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <h1 className="font-display" style={{ fontSize: 15, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Libro de Obra Digital</h1>
-          <p style={{ fontSize: 10, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentRole.short} · {currentRole.name}</p>
+        <div style={{ width: 38, height: 38, borderRadius: 12, background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "0 0 16px var(--accent-glow)" }}>
+          <BookMarked size={18} color="#fff" />
         </div>
-        <ThemeToggle isDark={isDark} toggleDark={() => setIsDark(!isDark)} />
-        <button onClick={handleLogout} className="btn-tap glass-panel" style={{ width: 38, height: 38, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-danger)", minHeight: 38 }} aria-label="Salir"><LogOut size={16} /></button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h1 className="font-display" style={{ fontSize: 14.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Libro de Obra Digital</h1>
+          <p style={{ fontSize: 10, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{rol.corto} · {rol.nombre}</p>
+        </div>
+        <BotonTema oscuro={oscuro} alternar={() => setOscuro(!oscuro)} />
+        <button onClick={salir} className="btn-tap glass-panel" aria-label="Salir"
+          style={{ width: 38, height: 38, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-danger)", minHeight: 38 }}>
+          <LogOut size={16} />
+        </button>
       </header>
 
       <main style={{ flex: 1, overflowY: "auto", paddingBottom: 100 }}>
-        {loading ? (
+        {cargando ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "100px 0", color: "var(--text-muted)" }}>
             <Loader2 size={28} className="spin" style={{ marginBottom: 12, color: "var(--accent)" }} />
-            <p style={{ fontSize: 12, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.1em" }}>Sincronizando…</p>
+            <p style={{ fontSize: 12, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.1em" }}>Verificando sellos…</p>
           </div>
-        ) : tab === "obra" ? (
-          <ProjectScreen projects={PROJECTS} selectedProjectId={selectedProjectId} foliosByProject={foliosByProject} onSelectProject={setSelectedProjectId} onStatClick={handleStatClick} />
+        ) : tab === "contrato" ? (
+          <PantallaContrato
+            contratoId={contratoId} folios={folios} rol={rol}
+            onSeleccionar={setContratoId}
+            onIrABitacora={(f) => { setFiltro(f); setTab("bitacora"); }}
+            onVerificar={() => setIntegridadAbierta(true)}
+          />
         ) : (
-          <div style={{ padding: 20 }}>
-            {/* Selector de contratos */}
+          <div style={{ padding: "16px 20px 20px" }}>
+            {/* Selector de contrato */}
             <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 12 }}>
-              {PROJECTS.map((p) => (
-                <button key={p.id} onClick={() => setSelectedProjectId(p.id)} className="btn-tap"
-                  style={{ flexShrink: 0, fontSize: 11, fontWeight: 600, padding: "7px 14px", borderRadius: 10, border: "none", minHeight: 32,
-                    background: p.id === selectedProjectId ? "var(--accent)" : "var(--bg-glass)",
-                    color: p.id === selectedProjectId ? "#fff" : "var(--text-muted)",
-                    boxShadow: p.id === selectedProjectId ? `0 3px 10px var(--accent-glow)` : "none" }}>
-                  {p.name.length > 22 ? p.name.slice(0, 22) + "…" : p.name}
+              {CONTRATOS.map((c) => (
+                <button key={c.id} onClick={() => setContratoId(c.id)} className="btn-tap font-mono"
+                  style={{ flexShrink: 0, fontSize: 10.5, fontWeight: 700, padding: "8px 13px", borderRadius: 10, border: "none", minHeight: 32,
+                    background: c.id === contratoId ? "var(--accent)" : "var(--bg-glass)",
+                    color: c.id === contratoId ? "#fff" : "var(--text-muted)",
+                    boxShadow: c.id === contratoId ? "0 3px 10px var(--accent-glow)" : "none" }}>
+                  {c.codigo}
                 </button>
               ))}
             </div>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.45, marginBottom: 14 }}>{contrato.nombre}</p>
 
-            {/* Buscador */}
-            <div style={{ position: "relative", marginBottom: 14 }}>
+            {/* Selector de libro */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+              {Object.values(LIBROS).map((l) => {
+                const activo = libro === l.clave;
+                const IconoLibro = l.Icon;
+                return (
+                  <button key={l.clave} onClick={() => setLibro(l.clave)} className="btn-tap"
+                    style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 4px", borderRadius: 13, border: "none", minHeight: "auto",
+                      background: activo ? "var(--accent)" : "var(--bg-glass)", color: activo ? "#fff" : "var(--text-muted)",
+                      boxShadow: activo ? "0 3px 12px var(--accent-glow)" : "none" }}>
+                    <IconoLibro size={17} />
+                    <span style={{ fontSize: 10.5, fontWeight: activo ? 700 : 600 }}>{l.corto}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14, padding: "0 2px" }}>
+              <p style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.4 }}>
+                Escribe: {LIBROS[libro].escribe}
+                {!puedeEscribir && <span style={{ opacity: 0.75 }}> · sólo lectura para tu perfil</span>}
+              </p>
+              <button onClick={() => setIntegridadAbierta(true)} className="btn-tap"
+                style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 10px", borderRadius: 9, border: "1px solid var(--border-glass)", background: "none", color: "var(--color-success)", fontWeight: 600, fontSize: 10.5, minHeight: "auto", flexShrink: 0 }}>
+                <ShieldCheck size={13} /> Verificar
+              </button>
+            </div>
+
+            {/* Búsqueda */}
+            <div style={{ position: "relative", marginBottom: 12 }}>
               <Search size={16} style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }} />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar en bitácora…"
+              <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar en el libro…"
                 className="glass-panel" style={{ width: "100%", borderRadius: 14, padding: "12px 12px 12px 40px", outline: "none", color: "var(--text-main)", fontSize: 13 }} />
             </div>
 
-            {/* Filtros de categoría */}
+            {/* Filtros */}
             <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 12 }}>
-              {["Todas", ...Object.keys(CATEGORY_CONFIG)].map((c) => {
-                const active = categoryFilter === c;
+              {["Todas", ...Object.keys(CATEGORIAS)].map((c) => {
+                const activo = filtro === c;
+                const texto = c === "Todas" ? "Todas" : CATEGORIAS[c].corto;
                 return (
-                  <button key={c} onClick={() => setCategoryFilter(c)} className="btn-tap"
+                  <button key={c} onClick={() => setFiltro(c)} className="btn-tap"
                     style={{ flexShrink: 0, fontSize: 11, fontWeight: 600, padding: "7px 14px", borderRadius: 10, border: "none", minHeight: 32,
-                      background: active ? "var(--accent)" : "var(--bg-glass)", color: active ? "#fff" : "var(--text-main)",
-                      boxShadow: active ? `0 3px 10px var(--accent-glow)` : "none" }}>
-                    {c}
+                      background: activo ? "var(--accent)" : "var(--bg-glass)", color: activo ? "#fff" : "var(--text-main)",
+                      boxShadow: activo ? "0 3px 10px var(--accent-glow)" : "none" }}>
+                    {texto}
                   </button>
                 );
               })}
             </div>
 
-            {visibleFolios.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--text-muted)" }}>
+            {visibles.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "56px 24px", color: "var(--text-muted)" }}>
                 <ClipboardList size={36} style={{ margin: "0 auto 12px", opacity: 0.4 }} />
-                <p style={{ fontSize: 13 }}>No se encontraron folios.</p>
+                <p style={{ fontSize: 13 }}>No hay folios que coincidan con la búsqueda.</p>
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {visibleFolios.map((folio) => <FolioCard key={folio.id} folio={folio} currentRole={currentRole} onClick={setViewingFolio} />)}
+                {visibles.map((f) => (
+                  <TarjetaFolio key={f.id} folio={f} onAbrir={(x) => setVerFolioId(x.id)}
+                    resaltarPendiente={rol.puedeResolver && f.autorRol !== rol.clave && CATEGORIAS_RESOLUBLES.includes(f.categoria)} />
+                ))}
               </div>
             )}
           </div>
         )}
       </main>
 
-      {/* FAB — crear folio */}
-      {currentRole.canCreate && tab === "bitacora" && !loading && (
-        <button onClick={() => setShowNew(true)} className="btn-tap btn-accent"
+      {puedeEscribir && tab === "bitacora" && !cargando && (
+        <button onClick={() => setNuevoAbierto(true)} className="btn-tap btn-accent"
           style={{ position: "fixed", zIndex: 40, right: 20, bottom: 90, width: 54, height: 54, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", border: "none" }}>
           <Plus size={24} />
         </button>
       )}
 
-      {/* Barra de navegación inferior */}
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 30, padding: "8px 20px", paddingBottom: "max(8px, env(safe-area-inset-bottom))" }}>
         <nav className="glass-panel" style={{ borderRadius: 18, display: "flex", padding: 5, gap: 4 }}>
-          {[{ key: "bitacora", label: "Bitácora", Icon: BookMarked }, { key: "obra", label: "Dashboard", Icon: Home }].map(({ key, label, Icon }) => {
-            const active = tab === key;
+          {[{ clave: "bitacora", texto: "Bitácora", Icono: BookMarked }, { clave: "contrato", texto: "Contrato", Icono: Home }].map(({ clave, texto, Icono }) => {
+            const activo = tab === clave;
             return (
-              <button key={key} onClick={() => setTab(key)} className="btn-tap"
+              <button key={clave} onClick={() => setTab(clave)} className="btn-tap"
                 style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 0", borderRadius: 14, border: "none",
-                  background: active ? "var(--accent)" : "transparent", color: active ? "#fff" : "var(--text-muted)",
-                  boxShadow: active ? `0 0 14px var(--accent-glow)` : "none" }}>
-                <Icon size={18} strokeWidth={active ? 2.5 : 2} />
-                <span style={{ fontSize: 13, fontWeight: active ? 700 : 500 }}>{label}</span>
+                  background: activo ? "var(--accent)" : "transparent", color: activo ? "#fff" : "var(--text-muted)",
+                  boxShadow: activo ? "0 0 14px var(--accent-glow)" : "none" }}>
+                <Icono size={18} strokeWidth={activo ? 2.5 : 2} />
+                <span style={{ fontSize: 13, fontWeight: activo ? 700 : 500 }}>{texto}</span>
               </button>
             );
           })}
         </nav>
       </div>
 
-      {showNew && <NewFolioSheet role={role} nextFolioNumber={nextFolioNumber} onClose={() => setShowNew(false)} onSave={handleNewFolioSave} />}
+      {nuevoAbierto && (
+        <HojaNuevoFolio rol={rol} libro={libro} numero={siguienteNumero}
+          onCerrar={() => setNuevoAbierto(false)} onGuardar={guardarNuevo} />
+      )}
+      {integridadAbierta && (
+        <ModalIntegridad libro={libro} folios={folios}
+          onCerrar={() => setIntegridadAbierta(false)} onAdulterar={adulterar} />
+      )}
+      {folioAFirmar && !folioActivo && (
+        <ModalFirma folio={folioAFirmar} rol={rol} onFirmar={firmarFolio} onCerrar={() => setFirmarId(null)} />
+      )}
     </div>
   );
 }
 
-export default function App() { return <ErrorBoundary><AppContent /></ErrorBoundary>; }
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <Aplicacion />
+    </ErrorBoundary>
+  );
+}
